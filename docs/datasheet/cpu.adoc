@@ -284,8 +284,8 @@ as soon as the CPU has fully halted ("CPU is sleeping"):
 .There is no enabled interrupt being pending.
 
 CPU-external modules like memories, timers and peripheral interfaces are not affected by this. Furthermore, the CPU will
-continue to buffer/enqueue incoming interrupt. The CPU will leave sleep mode as soon as any _enabled (via <<_mie>>)
-interrupt source becomes _pending_ or if a debug session is started.
+continue to buffer/enqueue incoming interrupt. The CPU will leave sleep mode as soon as any _enabled_ interrupt (via <<_mie>>)
+source becomes _pending_ or if a debug session is started.
 
 ===== Power-Down Mode
 
@@ -472,7 +472,7 @@ To benchmark a certain processor configuration for its setup-specific CPI value 
 The `A` ISA extension adds instructions and mechanisms for atomic memory access operations. Note that the NEORV32 `A`
 only includes the _load-reservate_ (`lr.w`) and _store-conditional_ (`sc.w`) instructions - the remaining read-modify-write
 instructions (like `amoswap`) are **not supported**. However, these missing instructions can be emulated using the
-LR and SC operations.
+LR and SC operations (quote from the RISC-V spec.: "_Any AMO can be emulated by an LR/SC pair._").
 
 .AMO Emulation
 [NOTE]
@@ -680,10 +680,14 @@ register file-related load/store or move instructions. The `Zfinx` extension'S f
 via dedicated <<_floating_point_csrs>>.
 This ISA extension is implemented as multi-cycle ALU co-process (`rtl/core/neorv32_cpu_cp_fpu.vhd`).
 
-.Fused Multiply-Add and Division Instructions
+.Fused / Multiply-Add Instructions
 [WARNING]
-Fused multiply-add instructions `f[n]m[add/sub].s` are not supported!
-Division `fdiv.s` and square root `fsqrt.s` instructions are not supported yet!
+Fused multiply-add instructions `f[n]m[add/sub].s` are not supported. A special GCC switch is used to prevent the
+compiler from emitting contracted/fused floating-point operations (see <<_default_compiler_flags>>).
+
+.Division and Squarer Root Instructions
+[WARNING]
+Division `fdiv.s` and square root `fsqrt.s` instructions are not supported yet.
 
 .Subnormal Number
 [WARNING]
@@ -803,9 +807,11 @@ Several <<_processor_top_entity_generics>> are provided to fine-tune the CPU's P
 [NOTE]
 When in debug-mode all PMP rules are ignored making the debugger have maximum access rights.
 
+.Protected Instruction Fetches
 [IMPORTANT]
-Instruction fetches are also triggered when denied by a certain PMP rule. However, the fetched instruction(s)
-will not be executed and will not change CPU core state.
+New instruction fetches are **always triggered even when denied** by a certain PMP rule. However, the fetched instruction(s)
+will not be executed and will not change CPU core state. Instead, they will raise a bus exception when reaching the CPU's
+executions stage.
 
 
 ==== `Sdext` ISA Extension

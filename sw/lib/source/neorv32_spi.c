@@ -1,47 +1,21 @@
-// #################################################################################################
-// # << NEORV32: neorv32_spi.c - Serial Peripheral Interface Controller (SPI) HW Driver >>         #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
-
-/**********************************************************************//**
+/**
  * @file neorv32_spi.c
  * @brief Serial peripheral interface controller (SPI) HW driver source file.
  *
  * @note These functions should only be used if the SPI unit was synthesized (IO_SPI_EN = true).
- **************************************************************************/
+ *
+ * @see https://stnolting.github.io/neorv32/sw/files.html
+ */
 
 #include "neorv32.h"
-#include "neorv32_spi.h"
 
 
 /**********************************************************************//**
@@ -125,7 +99,7 @@ uint32_t neorv32_spi_get_clock_speed(void) {
     tmp = 2 * PRSC_LUT[prsc_sel] * (1 + clock_div);
   }
 
-  return NEORV32_SYSINFO->CLK / tmp;
+  return neorv32_sysinfo_get_clk() / tmp;
 }
 
 
@@ -163,15 +137,14 @@ int neorv32_spi_get_fifo_depth(void) {
  * Activate single SPI chip select signal.
  *
  * @note The SPI chip select output lines are LOW when activated.
+ * @note This function is blocking.
  *
  * @param cs Chip select line to activate (0..7).
  **************************************************************************/
 void neorv32_spi_cs_en(int cs) {
 
-  uint32_t tmp = NEORV32_SPI->CTRL;
-  tmp &= ~(0xf << SPI_CTRL_CS_SEL0); // clear old configuration
-  tmp |= (1 << SPI_CTRL_CS_EN) | ((cs & 7) << SPI_CTRL_CS_SEL0); // set new configuration
-  NEORV32_SPI->CTRL = tmp;
+  while(NEORV32_SPI->CTRL & (1<<SPI_CTRL_TX_FULL)); // wait for free space in TX FIFO
+  neorv32_spi_cs_en_nonblocking(cs);
 }
 
 
@@ -179,15 +152,17 @@ void neorv32_spi_cs_en(int cs) {
  * Deactivate currently active SPI chip select signal.
  *
  * @note The SPI chip select output lines are HIGH when deactivated.
+ * @note This function is blocking.
  **************************************************************************/
 void neorv32_spi_cs_dis(void) {
 
-  NEORV32_SPI->CTRL &= ~(1 << SPI_CTRL_CS_EN);
+  while(NEORV32_SPI->CTRL & (1<<SPI_CTRL_TX_FULL)); // wait for free space in TX FIFO
+  neorv32_spi_cs_dis_nonblocking();
 }
 
 
 /**********************************************************************//**
- * Initiate SPI transfer.
+ * Perform a single SPI data transfer.
  *
  * @note This function is blocking.
  *
@@ -196,21 +171,20 @@ void neorv32_spi_cs_dis(void) {
  **************************************************************************/
 uint8_t neorv32_spi_trans(uint8_t tx_data) {
 
-  NEORV32_SPI->DATA = (uint32_t)tx_data; // trigger transfer
+  neorv32_spi_put_nonblocking(tx_data);
   while (neorv32_spi_busy()); // wait for current transfer to finish
-
-  return (uint8_t)NEORV32_SPI->DATA;
+  return neorv32_spi_get_nonblocking();
 }
 
 
 /**********************************************************************//**
- * Initiate SPI TX transfer (non-blocking).
+ * Put SPI TX data (non-blocking).
  *
  * @param tx_data Transmit data (8-bit, LSB-aligned).
  **************************************************************************/
 void neorv32_spi_put_nonblocking(uint8_t tx_data) {
 
-  NEORV32_SPI->DATA = (uint32_t)tx_data; // put transfer into TX FIFO
+  NEORV32_SPI->DATA = (0 << SPI_DATA_CMD) | ((uint32_t)tx_data); // put data into TX FIFO
 }
 
 
@@ -222,6 +196,46 @@ void neorv32_spi_put_nonblocking(uint8_t tx_data) {
 uint8_t neorv32_spi_get_nonblocking(void) {
 
   return (uint8_t)NEORV32_SPI->DATA;
+}
+
+
+/**********************************************************************//**
+ * Activate single SPI chip select signal (non-blocking).
+ *
+ * @note The SPI chip select output lines are LOW when activated.
+ *
+ * @param cs Chip select line to activate (0..7).
+ **************************************************************************/
+void neorv32_spi_cs_en_nonblocking(int cs) {
+
+  NEORV32_SPI->DATA = (1 << SPI_DATA_CMD) | ((1 << SPI_DATA_CSEN) + (cs & 7)); // put CS command into TX FIFO
+}
+
+
+/**********************************************************************//**
+ * Deactivate currently active SPI chip select signal (non-blocking).
+ *
+ * @note The SPI chip select output lines are HIGH when deactivated.
+ **************************************************************************/
+void neorv32_spi_cs_dis_nonblocking(void) {
+
+  NEORV32_SPI->DATA = (1 << SPI_DATA_CMD) | 0; // put CS command into TX FIFO
+}
+
+
+/**********************************************************************//**
+ * Check if any chip-select line is active.
+ *
+ * @return 0 if no CS lines are active, 1 if at least one CS line is active.
+ **************************************************************************/
+int neorv32_spi_check_cs(void) {
+
+  if (NEORV32_SPI->CTRL & (1<<SPI_CS_ACTIVE)) {
+    return 1;
+  }
+  else {
+    return 0;
+  }
 }
 
 

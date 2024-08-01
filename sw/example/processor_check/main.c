@@ -1,36 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - Processor Test Program >>                                                        #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 
 /**********************************************************************//**
@@ -48,17 +22,15 @@
  **************************************************************************/
 /**@{*/
 //** UART BAUD rate */
-#define BAUD_RATE           (19200)
+#define BAUD_RATE        (19200)
 //** Reachable but unaligned address */
-#define ADDR_UNALIGNED_1    (0x00000001UL)
+#define ADDR_UNALIGNED_1 (0x00000001UL)
 //** Reachable but unaligned address */
-#define ADDR_UNALIGNED_3    (0x00000003UL)
+#define ADDR_UNALIGNED_3 (0x00000003UL)
 //** Unreachable word-aligned address */
-#define ADDR_UNREACHABLE    ((uint32_t)&NEORV32_DM->SREG)
-//** Read-only word-aligned address */
-#define ADDR_READONLY       ((uint32_t)&NEORV32_SYSINFO->CLK)
+#define ADDR_UNREACHABLE (NEORV32_DM_BASE)
 //** External memory base address */
-#define EXT_MEM_BASE        (0xF0000000UL)
+#define EXT_MEM_BASE     (0xF0000000UL)
 /**@}*/
 
 
@@ -175,7 +147,7 @@ int main() {
   // fancy intro
   // -----------------------------------------------
   neorv32_rte_print_logo(); // show NEORV32 ASCII logo
-  neorv32_rte_print_credits(); // show project credits
+  neorv32_rte_print_about(); // show project credits
   neorv32_rte_print_hw_config(); // show full hardware configuration report
 
 
@@ -583,37 +555,41 @@ int main() {
 
   tmp_a = trap_cnt; // current number of traps
 
-  {
+  // try executing some illegal instructions
+  asm volatile (".align 4");
+  asm volatile (".word 0x0e00202f"); // amoswap.w x0, x0, (x0)
+  asm volatile (".word 0x34004073"); // illegal CSR access funct3 (using mscratch)
+  asm volatile (".word 0x30200077"); // mret with illegal opcode
+  asm volatile (".word 0x3020007f"); // mret with illegal opcode
+  asm volatile (".word 0x7b200073"); // dret outside of debug mode
+  asm volatile (".word 0x7b300073"); // illegal system funct12
+  asm volatile (".word 0xfe000033"); // illegal add funct7
+  asm volatile (".word 0x80002163"); // illegal branch funct3 (misaligned DST if C not available)
+  asm volatile (".word 0x0000200f"); // illegal fence funct3
+  asm volatile (".word 0xfe002fe3"); // illegal store funct3
+  if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C)) { // C extension enabled
     asm volatile (".align 4");
-    if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C)) { // C extension enabled
-      asm volatile (".half 0x0000"); // canonical compressed illegal
-      asm volatile (".half 0x66aa"); // c.flwsp (illegal since F is not supported)
-    }
-    asm volatile (".word 0x0e00202f"); // amoswap.w x0, x0, (x0)
-    asm volatile (".word 0x34004073"); // illegal CSR access funct3 (using mscratch)
-    asm volatile (".word 0x30200077"); // mret with illegal opcode
-    asm volatile (".word 0x3020007f"); // mret with illegal opcode
-    asm volatile (".word 0x7b200073"); // dret outside of debug mode
-    asm volatile (".word 0x7b300073"); // illegal system funct12
-    asm volatile (".word 0xfe000033"); // illegal add funct7
-    asm volatile (".word 0x80002163"); // illegal branch funct3 (misaligned DST if C not available)
-    asm volatile (".word 0x0000200f"); // illegal fence funct3
-    asm volatile (".word 0xfe002fe3"); // illegal store funct3
+    asm volatile (".half 0x0000"); // canonical compressed illegal
+    asm volatile (".half 0x66aa"); // c.flwsp (illegal since F ISA extension is not supported)
     asm volatile (".align 4");
   }
+  asm volatile (".align 4");
 
-  // number of traps we are expecting
+  // number of traps we are expecting + expected instruction word of last illegal instruction
+  uint32_t invalid_instr;
   if (neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C)) { // C extension enabled
     tmp_a += 12;
+    invalid_instr = 0x08812681; // mtinst: pre-decompressed; clear bit 1 if compressed instruction
   }
   else { // C extension disabled
     tmp_a += 10;
+    invalid_instr = 0xfe002fe3;
   }
 
   tmp_b = trap_cnt; // number of traps we have seen here
 
   if ((neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_I_ILLEGAL) && // illegal instruction exception
-      (neorv32_cpu_csr_read(CSR_MTINST) == 0xfe002fe3) && // instruction word of last illegal instruction
+      (neorv32_cpu_csr_read(CSR_MTINST) == invalid_instr) && // instruction word of last illegal instruction
       (tmp_a == tmp_b)) { // right amount of illegal instruction exceptions
     test_ok();
   }
@@ -623,34 +599,6 @@ int main() {
 
   // re-enable machine-mode interrupts
   neorv32_cpu_csr_set(CSR_MSTATUS, 1 << CSR_MSTATUS_MIE);
-
-
-  // ----------------------------------------------------------
-  // Illegal compressed instruction
-  // ----------------------------------------------------------
-  neorv32_cpu_csr_write(CSR_MCAUSE, mcause_never_c);
-  PRINT_STANDARD("[%i] Illegal C instr. EXC ", cnt_test);
-
-  // skip if C-mode is not implemented
-  if ((neorv32_cpu_csr_read(CSR_MISA) & (1<<CSR_MISA_C))) {
-
-    cnt_test++;
-
-    // illegal 16-bit instruction (official UNIMP instruction)
-    asm volatile (".align 2     \n"
-                  ".half 0x0001 \n" // NOP
-                  ".half 0x0000");  // UNIMP
-
-    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_I_ILLEGAL) {
-      test_ok();
-    }
-    else {
-      test_fail();
-    }
-  }
-  else {
-    PRINT_STANDARD("[n.a.]\n");
-  }
 
 
   // ----------------------------------------------------------
@@ -758,10 +706,10 @@ int main() {
   cnt_test++;
 
   // store to unreachable aligned address
-  neorv32_cpu_store_unsigned_word(ADDR_READONLY, 0);
+  neorv32_cpu_store_unsigned_word(ADDR_UNREACHABLE, 0);
 
   if ((neorv32_cpu_csr_read(CSR_MCAUSE) == TRAP_CODE_S_ACCESS) && // store bus access error exception
-      (neorv32_cpu_csr_read(CSR_MTVAL) == ADDR_READONLY)) {
+      (neorv32_cpu_csr_read(CSR_MTVAL) == ADDR_UNREACHABLE)) {
     test_ok();
   }
   else {
@@ -1041,8 +989,34 @@ int main() {
   // ----------------------------------------------------------
   // Fast interrupt channel 0
   // ----------------------------------------------------------
-  PRINT_STANDARD("[%i] FIRQ0 ", cnt_test);
-  PRINT_STANDARD("[n.a.]\n");
+  neorv32_cpu_csr_write(CSR_MCAUSE, mcause_never_c);
+  PRINT_STANDARD("[%i] FIRQ0 (TRNG) ", cnt_test);
+
+  if (NEORV32_SYSINFO->SOC & (1 << SYSINFO_SOC_IO_TRNG)) {
+    cnt_test++;
+
+    // enable TRNG, trigger IRQ when FIFO is full
+    neorv32_trng_enable(1);
+
+    // enable fast interrupt
+    neorv32_cpu_csr_write(CSR_MIE, 1 << TRNG_FIRQ_ENABLE);
+
+    // sleep until interrupt
+    neorv32_cpu_sleep();
+
+    // no more interrupts
+    neorv32_cpu_csr_write(CSR_MIE, 0);
+
+    if (neorv32_cpu_csr_read(CSR_MCAUSE) == TRNG_TRAP_CODE) {
+      test_ok();
+    }
+    else {
+      test_fail();
+    }
+  }
+  else {
+    PRINT_STANDARD("[n.a.]\n");
+  }
 
 
   // ----------------------------------------------------------
@@ -1070,6 +1044,9 @@ int main() {
     neorv32_uart0_setup(BAUD_RATE, 1 << UART_CTRL_IRQ_RX_NEMPTY);
     // make sure sim mode is disabled
     NEORV32_UART0->CTRL &= ~(1 << UART_CTRL_SIM_MODE);
+    // clear FIFOs
+    neorv32_uart0_rx_clear();
+    neorv32_uart0_tx_clear();
 
     // enable fast interrupt
     neorv32_cpu_csr_write(CSR_MIE, 1 << UART0_RX_FIRQ_ENABLE);
@@ -1116,6 +1093,9 @@ int main() {
     neorv32_uart0_setup(BAUD_RATE, 1 << UART_CTRL_IRQ_TX_EMPTY);
     // make sure sim mode is disabled
     NEORV32_UART0->CTRL &= ~(1 << UART_CTRL_SIM_MODE);
+    // clear FIFOs
+    neorv32_uart0_rx_clear();
+    neorv32_uart0_tx_clear();
 
     neorv32_uart0_putc(0);
     while(neorv32_uart0_tx_busy());
@@ -1159,6 +1139,9 @@ int main() {
     neorv32_uart1_setup(BAUD_RATE, 1 << UART_CTRL_IRQ_RX_NEMPTY);
     // make sure sim mode is disabled
     NEORV32_UART1->CTRL &= ~(1 << UART_CTRL_SIM_MODE);
+    // clear FIFOs
+    neorv32_uart1_rx_clear();
+    neorv32_uart1_tx_clear();
 
     // UART1 RX interrupt enable
     neorv32_cpu_csr_write(CSR_MIE, 1 << UART1_RX_FIRQ_ENABLE);
@@ -1202,6 +1185,9 @@ int main() {
     neorv32_uart1_setup(BAUD_RATE, 1 << UART_CTRL_IRQ_TX_EMPTY);
     // make sure sim mode is disabled
     NEORV32_UART1->CTRL &= ~(1 << UART_CTRL_SIM_MODE);
+    // clear FIFOs
+    neorv32_uart1_rx_clear();
+    neorv32_uart1_tx_clear();
 
     neorv32_uart1_putc(0);
     while(neorv32_uart1_tx_busy());
@@ -1240,7 +1226,7 @@ int main() {
     cnt_test++;
 
     // configure SPI
-    neorv32_spi_setup(CLK_PRSC_8, 0, 0, 0, 1<<SPI_CTRL_IRQ_IDLE); // IRQ when TX FIFO is empty and SPI bus engine is idle
+    neorv32_spi_setup(CLK_PRSC_8, 0, 1, 1, 1<<SPI_CTRL_IRQ_IDLE); // IRQ when TX FIFO is empty and SPI bus engine is idle
 
     // trigger SPI transmissions
     neorv32_spi_put_nonblocking(0xab); // non-blocking
@@ -1249,8 +1235,8 @@ int main() {
     // enable fast interrupt
     neorv32_cpu_csr_write(CSR_MIE, 1 << SPI_FIRQ_ENABLE);
 
-    // wait for interrupt
-    asm volatile ("wfi");
+    // sleep until interrupt
+    neorv32_cpu_sleep();
 
     neorv32_cpu_csr_write(CSR_MIE, 0);
 
@@ -1287,8 +1273,8 @@ int main() {
     // enable TWI FIRQ
     neorv32_cpu_csr_write(CSR_MIE, 1 << TWI_FIRQ_ENABLE);
 
-    // wait for interrupt
-    asm volatile ("wfi");
+    // sleep until interrupt
+    neorv32_cpu_sleep();
 
     neorv32_cpu_csr_write(CSR_MIE, 0);
 
@@ -1319,15 +1305,24 @@ int main() {
     int xirq_err_cnt = 0;
     xirq_trap_handler_ack = 0;
 
+    neorv32_gpio_port_set(0);
+
     xirq_err_cnt += neorv32_xirq_setup(); // initialize XIRQ
     xirq_err_cnt += neorv32_xirq_install(0, xirq_trap_handler0); // install XIRQ IRQ handler channel 0
     xirq_err_cnt += neorv32_xirq_install(1, xirq_trap_handler1); // install XIRQ IRQ handler channel 1
+    neorv32_xirq_setup_trigger(0, XIRQ_TRIGGER_EDGE_RISING); // configure channel 0 as rising-edge trigger
+    neorv32_xirq_setup_trigger(1, XIRQ_TRIGGER_EDGE_RISING); // configure channel 1 as rising-edge trigger
+    neorv32_xirq_clear_pending(0); // clear any pending request
+    neorv32_xirq_clear_pending(1); // clear any pending request
+    neorv32_xirq_channel_enable(0); // enable XIRQ channel 0
+    neorv32_xirq_channel_enable(1); // enable XIRQ channel 1
 
     // enable XIRQ FIRQ
     neorv32_cpu_csr_write(CSR_MIE, 1 << XIRQ_FIRQ_ENABLE);
 
     // trigger XIRQ channel 1 and 0
     neorv32_gpio_port_set(3);
+    neorv32_gpio_port_set(0);
 
     // wait for interrupt
     asm volatile ("nop");
@@ -1415,7 +1410,7 @@ int main() {
     neorv32_dma_transfer((uint32_t)(&dma_src), (uint32_t)(&NEORV32_CRC->DATA), 4, tmp_a);
 
     // sleep until interrupt
-    asm volatile ("wfi");
+    neorv32_cpu_sleep();
 
     neorv32_cpu_csr_write(CSR_MIE, 0);
 
@@ -1451,14 +1446,13 @@ int main() {
 
     // configure and enable SDI + SPI
     neorv32_sdi_setup(1 << SDI_CTRL_IRQ_RX_AVAIL);
-    neorv32_spi_setup(CLK_PRSC_4, 0, 0, 0, 0);
+    neorv32_spi_setup(CLK_PRSC_8, 0, 0, 0, 0);
 
     // enable fast interrupt
     neorv32_cpu_csr_write(CSR_MIE, 1 << SDI_FIRQ_ENABLE);
 
     // write test data to SDI
-    neorv32_sdi_rx_clear();
-    neorv32_sdi_put(0xab);
+    neorv32_sdi_put(0xeb);
 
     // trigger SDI IRQ by sending data via SPI
     neorv32_spi_cs_en(7); // select SDI
@@ -1471,9 +1465,11 @@ int main() {
 
     neorv32_cpu_csr_write(CSR_MIE, 0);
 
+    uint8_t sdi_read_data;
     if ((neorv32_cpu_csr_read(CSR_MCAUSE) == SDI_TRAP_CODE) && // correct trap code
-        (neorv32_sdi_get_nonblocking() == 0x83) && // correct SDI read data
-        ((tmp_a & 0xff) == 0xab)) { // correct SPI read data
+        (neorv32_sdi_get(&sdi_read_data) == 0) && // correct SDI read data status
+        (sdi_read_data == 0x83) && // correct SDI read data
+        ((tmp_a & 0xff) == 0xeb)) { // correct SPI read data
       test_ok();
     }
     else {
@@ -1497,8 +1493,8 @@ int main() {
     // enable GPTMR FIRQ
     neorv32_cpu_csr_write(CSR_MIE, 1 << GPTMR_FIRQ_ENABLE);
 
-    // match-interrupt after CLK_PRSC_2*THRESHOLD = 2*2 = 8 clock cycles
-    neorv32_gptmr_setup(CLK_PRSC_2, 2, 1);
+    // match-interrupt after CLK_PRSC_2*THRESHOLD = 2*2 = 8 clock cycles, single-shot mode
+    neorv32_gptmr_setup(CLK_PRSC_2, 2, 0);
 
     // wait for interrupt
     asm volatile ("nop");
@@ -1507,8 +1503,7 @@ int main() {
     neorv32_cpu_csr_write(CSR_MIE, 0);
 
     if ((neorv32_cpu_csr_read(CSR_MCAUSE) == GPTMR_TRAP_CODE) && // correct interrupt?
-        (neorv32_gptmr_trigger_matched()  == 1) && // IRQ caused by timer match?
-        (neorv32_gptmr_trigger_captured() == 0)) { // no capture trigger?
+        (NEORV32_GPTMR->CTRL & (1 << GPTMR_CTRL_IRQ_PND))) { // timer interrupt pending?
       test_ok();
     }
     else {
@@ -1578,6 +1573,7 @@ int main() {
     neorv32_cpu_csr_write(CSR_MIE, 1 << SLINK_RX_FIRQ_ENABLE);
 
     // send RX_FIFO/2 data words
+    neorv32_slink_set_dst(0b1010);
     for (tmp_b=0; tmp_b<(tmp_a/2); tmp_b++) {
       neorv32_slink_put_last(0xAABBCCDD); // mark as end-of-stream
     }
@@ -1592,6 +1588,7 @@ int main() {
     if ((neorv32_cpu_csr_read(CSR_MCAUSE) == SLINK_RX_TRAP_CODE) && // correct trap code
         (neorv32_slink_rx_status() == SLINK_FIFO_HALF) && // RX FIFO is at least half full
         (neorv32_slink_get() == 0xAABBCCDD) && // correct RX data
+        (neorv32_slink_get_src() == 0b1010) && // correct routing information
         (neorv32_slink_check_last())) { // is marked as "end of stream"
       test_ok();
     }
@@ -1621,6 +1618,7 @@ int main() {
     neorv32_cpu_csr_write(CSR_MIE, 1 << SLINK_TX_FIRQ_ENABLE);
 
     // send single data word
+    neorv32_slink_set_dst(0b1100);
     neorv32_slink_put(0x11223344);
 
     // wait for interrupt
@@ -1633,6 +1631,7 @@ int main() {
     if ((neorv32_cpu_csr_read(CSR_MCAUSE) == SLINK_TX_TRAP_CODE) && // correct trap code
         (neorv32_slink_tx_status() == SLINK_FIFO_EMPTY) && // TX FIFO is empty
         (neorv32_slink_get() == 0x11223344) && // correct RX data
+        (neorv32_slink_get_src() == 0b1100) && // correct routing information
         (neorv32_slink_check_last() == 0)) { // is NOT marked as "end of stream"
       test_ok();
     }
@@ -1748,9 +1747,9 @@ int main() {
     // enable mtime interrupt
     neorv32_cpu_csr_write(CSR_MIE, 1 << CSR_MIE_MTIE);
 
-    // put CPU into sleep mode -the CPU has to wakeup again if any enabled interrupt source
+    // put CPU into sleep mode - the CPU has to wakeup again if any enabled interrupt source
     // becomes pending - even if we are in m-mode and mstatus.mie is cleared
-    asm volatile ("wfi");
+    neorv32_cpu_sleep();
 
     neorv32_cpu_csr_write(CSR_MIE, 0);
     neorv32_cpu_csr_set(CSR_MSTATUS, 1 << CSR_MSTATUS_MIE);
@@ -1895,17 +1894,15 @@ int main() {
     // [NOTE] LR/SC operations bypass the data cache so we need to flush/reload
     //        it before/after making "normal" load/store operations
 
-    neorv32_cpu_invalidate_reservations(); // invalidate all current reservations
-
     amo_var = 0x00cafe00; // initialize
     asm volatile ("fence"); // flush/reload d-cache
 
-    tmp_a = neorv32_cpu_load_reservate_word((uint32_t)&amo_var);
+    tmp_a = neorv32_cpu_amolr((uint32_t)&amo_var);
     amo_var = 0x10cafe00; // break reservation
     asm volatile ("fence"); // flush/reload d-cache
-    tmp_b = neorv32_cpu_store_conditional_word((uint32_t)&amo_var, 0xaaaaaaaa);
-    tmp_b = (tmp_b << 1) | neorv32_cpu_store_conditional_word((uint32_t)&amo_var, 0xcccccccc); // another SC: must fail
-    tmp_b = (tmp_b << 1) | neorv32_cpu_store_conditional_word((uint32_t)ADDR_UNREACHABLE, 0); // another SC: must fail; no bus exception!
+    tmp_b = neorv32_cpu_amosc((uint32_t)&amo_var, 0xaaaaaaaa);
+    tmp_b = (tmp_b << 1) | neorv32_cpu_amosc((uint32_t)&amo_var, 0xcccccccc); // another SC: must fail
+    tmp_b = (tmp_b << 1) | neorv32_cpu_amosc((uint32_t)ADDR_UNREACHABLE, 0); // another SC: must fail; no bus exception!
     asm volatile ("fence"); // flush/reload d-cache
 
     if ((tmp_a   == 0x00cafe00) && // correct LR.W result
@@ -1938,17 +1935,15 @@ int main() {
     // [NOTE] LR/SC operations bypass the data cache so we need to flush/reload
     //        it before/after making "normal" load/store operations
 
-    neorv32_cpu_invalidate_reservations(); // invalidate all current reservations
-
     amo_var = 0x00abba00; // initialize
     asm volatile ("fence"); // flush/reload d-cache
 
-    tmp_a = neorv32_cpu_load_reservate_word((uint32_t)&amo_var);
+    tmp_a = neorv32_cpu_amolr((uint32_t)&amo_var);
     asm volatile ("fence"); // flush/reload d-cache
     neorv32_cpu_load_unsigned_word((uint32_t)&amo_var); // dummy read, must not alter reservation set state
-    tmp_b = neorv32_cpu_store_conditional_word((uint32_t)&amo_var, 0xcccccccc);
-    tmp_b = (tmp_b << 1) | neorv32_cpu_store_conditional_word((uint32_t)&amo_var, 0xcccccccc); // another SC: must fail
-    tmp_b = (tmp_b << 1) | neorv32_cpu_store_conditional_word((uint32_t)ADDR_UNREACHABLE, 0); // another SC: must fail; no bus exception!
+    tmp_b = neorv32_cpu_amosc((uint32_t)&amo_var, 0xcccccccc);
+    tmp_b = (tmp_b << 1) | neorv32_cpu_amosc((uint32_t)&amo_var, 0xcccccccc); // another SC: must fail
+    tmp_b = (tmp_b << 1) | neorv32_cpu_amosc((uint32_t)ADDR_UNREACHABLE, 0); // another SC: must fail; no bus exception!
     asm volatile ("fence"); // flush/reload d-cache
 
     if ((tmp_a   == 0x00abba00) && // correct LR.W result

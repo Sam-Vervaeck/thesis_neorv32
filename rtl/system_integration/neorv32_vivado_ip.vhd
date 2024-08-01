@@ -28,7 +28,7 @@ entity neorv32_vivado_ip is
     -- AXI-Stream Interfaces --
     AXI4_STREAM_EN             : boolean                        := false;
     -- General --
-    CLOCK_FREQUENCY            : natural                        := 0;
+    CLOCK_FREQUENCY            : natural; -- no default as this HAS to be set by the user
     HART_ID                    : std_ulogic_vector(31 downto 0) := x"00000000";
     JEDEC_ID                   : std_ulogic_vector(10 downto 0) := "00000000000";
     INT_BOOTLOADER_EN          : boolean                        := false;
@@ -59,8 +59,6 @@ entity neorv32_vivado_ip is
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS               : natural range 0 to 13          := 0;
     HPM_CNT_WIDTH              : natural range 0 to 64          := 40;
-    -- Atomic Memory Access - Reservation Set Granularity --
-    AMO_RVS_GRANULARITY        : natural                        := 4;
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN            : boolean                        := false;
     MEM_INT_IMEM_SIZE          : natural                        := 16*1024;
@@ -86,11 +84,10 @@ entity neorv32_vivado_ip is
     XIP_CACHE_NUM_BLOCKS       : natural range 1 to 256         := 8;
     XIP_CACHE_BLOCK_SIZE       : natural range 1 to 2**16       := 256;
     -- External Interrupts Controller (XIRQ) --
-    XIRQ_NUM_CH                : natural                        := 0;
-    XIRQ_TRIGGER_TYPE          : std_ulogic_vector(31 downto 0) := x"ffffffff";
-    XIRQ_TRIGGER_POLARITY      : std_ulogic_vector(31 downto 0) := x"ffffffff";
+    XIRQ_NUM_CH                : natural range 0 to 32          := 0;
     -- Processor peripherals --
-    IO_GPIO_NUM                : natural range 0 to 64          := 0;
+    IO_GPIO_IN_NUM             : natural range 0 to 64          := 0;
+    IO_GPIO_OUT_NUM            : natural range 0 to 64          := 0;
     IO_MTIME_EN                : boolean                        := false;
     IO_UART0_EN                : boolean                        := false;
     IO_UART0_RX_FIFO           : natural range 1 to 2**15       := 1;
@@ -110,8 +107,8 @@ entity neorv32_vivado_ip is
     IO_TRNG_FIFO               : natural range 1 to 2**15       := 1;
     IO_CFS_EN                  : boolean                        := false;
     IO_CFS_CONFIG              : std_ulogic_vector(31 downto 0) := x"00000000";
-    IO_CFS_IN_SIZE             : natural                        := 32;
-    IO_CFS_OUT_SIZE            : natural                        := 32;
+    IO_CFS_IN_SIZE             : natural range 0 to 4096        := 32;
+    IO_CFS_OUT_SIZE            : natural range 0 to 4096        := 32;
     IO_NEOLED_EN               : boolean                        := false;
     IO_NEOLED_TX_FIFO          : natural range 1 to 2**15       := 1;
     IO_GPTMR_EN                : boolean                        := false;
@@ -150,11 +147,11 @@ entity neorv32_vivado_ip is
     m_axi_arready  : in  std_ulogic := '0';
     -- Read Data Channel --
     m_axi_rdata    : in  std_ulogic_vector(31 downto 0) := x"00000000";
-    m_axi_rresp    : in  std_ulogic_vector(1 downto 0) := "00";
+    m_axi_rresp    : in  std_ulogic_vector(1 downto 0) := "11"; -- error by default
     m_axi_rvalid   : in  std_ulogic := '0';
     m_axi_rready   : out std_ulogic;
     -- Write Response Channel --
-    m_axi_bresp    : in  std_ulogic_vector(1 downto 0) := "00";
+    m_axi_bresp    : in  std_ulogic_vector(1 downto 0) := "11"; -- error by default
     m_axi_bvalid   : in  std_ulogic := '0';
     m_axi_bready   : out std_ulogic;
     -- ------------------------------------------------------------
@@ -162,12 +159,14 @@ entity neorv32_vivado_ip is
     -- ------------------------------------------------------------
     -- Source --
 --  s0_axis_aclk   : in  std_ulogic := '0'; -- just to satisfy Vivado, but not actually used!
+    s0_axis_tdest  : out std_ulogic_vector(3 downto 0);
     s0_axis_tvalid : out std_ulogic;
     s0_axis_tready : in  std_ulogic := '0';
     s0_axis_tdata  : out std_ulogic_vector(31 downto 0);
     s0_axis_tlast  : out std_ulogic;
     -- Sink --
 --  s1_axis_aclk   : in  std_ulogic := '0'; -- just to satisfy Vivado, but not actually used!
+    s1_axis_tid    : in  std_ulogic_vector(3 downto 0) := x"0";
     s1_axis_tvalid : in  std_ulogic := '0';
     s1_axis_tready : out std_ulogic;
     s1_axis_tdata  : in  std_ulogic_vector(31 downto 0) := x"00000000";
@@ -175,7 +174,6 @@ entity neorv32_vivado_ip is
     -- ------------------------------------------------------------
     -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true)
     -- ------------------------------------------------------------
-    jtag_trst_i    : in  std_ulogic := '1'; -- low-active; disable reset by default
     jtag_tck_i     : in  std_ulogic := '0';
     jtag_tdi_i     : in  std_ulogic := '0';
     jtag_tdo_o     : out std_ulogic := '0';
@@ -188,9 +186,9 @@ entity neorv32_vivado_ip is
     xip_clk_o      : out std_ulogic;
     xip_dat_i      : in  std_ulogic := '0';
     xip_dat_o      : out std_ulogic;
-    -- GPIO (available if IO_GPIO_NUM > 0) --
-    gpio_o         : out std_ulogic_vector(63 downto 0);
-    gpio_i         : in  std_ulogic_vector(63 downto 0) := x"0000000000000000";
+    -- GPIO (available if IO_GPIO_IN/OUT_NUM > 0) --
+    gpio_o         : out std_ulogic_vector(IO_GPIO_OUT_NUM-1 downto 0);
+    gpio_i         : in  std_ulogic_vector(IO_GPIO_IN_NUM-1 downto 0) := (others => '0');
     -- primary UART0 (available if IO_UART0_EN = true) --
     uart0_txd_o    : out std_ulogic;
     uart0_rxd_i    : in  std_ulogic := '0';
@@ -220,7 +218,7 @@ entity neorv32_vivado_ip is
     onewire_i      : in  std_ulogic := '0';
     onewire_o      : out std_ulogic;
     -- PWM (available if IO_PWM_NUM_CH > 0) --
-    pwm_o          : out std_ulogic_vector(11 downto 0);
+    pwm_o          : out std_ulogic_vector(IO_PWM_NUM_CH-1 downto 0);
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i       : in  std_ulogic_vector(IO_CFS_IN_SIZE-1  downto 0) := (others => '0');
     cfs_out_o      : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0);
@@ -228,10 +226,8 @@ entity neorv32_vivado_ip is
     neoled_o       : out std_ulogic;
     -- Machine timer system time (available if IO_MTIME_EN = true) --
     mtime_time_o   : out std_ulogic_vector(63 downto 0);
-    -- GPTMR timer capture (available if IO_GPTMR_EN = true) --
-    gptmr_trig_i   : in  std_ulogic := '0';
     -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
-    xirq_i         : in  std_ulogic_vector(31 downto 0) := x"00000000";
+    xirq_i         : in  std_ulogic_vector(XIRQ_NUM_CH-1 downto 0) := (others => '0');
     -- CPU Interrupts --
     mtime_irq_i    : in  std_ulogic := '0';
     msw_irq_i      : in  std_ulogic := '0';
@@ -241,13 +237,23 @@ end entity;
 
 architecture neorv32_vivado_ip_rtl of neorv32_vivado_ip is
 
+  -- auto-configuration --
+  constant num_gpio_c : natural := max_natural_f(IO_GPIO_IN_NUM, IO_GPIO_OUT_NUM);
+
+  -- variable-sized ports --
+  signal gpio_o_aux : std_ulogic_vector(63 downto 0);
+  signal gpio_i_aux : std_ulogic_vector(63 downto 0);
+  signal pwm_o_aux  : std_ulogic_vector(11 downto 0);
+  signal xirq_i_aux : std_ulogic_vector(31 downto 0);
+
   -- internal wishbone bus --
   type wb_bus_t is record
     adr : std_ulogic_vector(31 downto 0);
     di  : std_ulogic_vector(31 downto 0);
     do  : std_ulogic_vector(31 downto 0);
+    tag : std_ulogic_vector(2 downto 0);
     we  : std_ulogic;
-    sel : std_ulogic_vector(03 downto 0);
+    sel : std_ulogic_vector(3 downto 0);
     cyc : std_ulogic;
     ack : std_ulogic;
     err : std_ulogic;
@@ -255,10 +261,7 @@ architecture neorv32_vivado_ip_rtl of neorv32_vivado_ip is
   signal wb_core : wb_bus_t;
 
   -- AXI bridge control --
-  type axi_ctrl_t is record
-    radr_received, wadr_received, wdat_received : std_ulogic;
-  end record;
-  signal axi_ctrl : axi_ctrl_t;
+  signal axi_radr_received, axi_wadr_received, axi_wdat_received : std_ulogic;
 
 begin
 
@@ -300,8 +303,6 @@ begin
     -- Hardware Performance Monitors --
     HPM_NUM_CNTS               => HPM_NUM_CNTS,
     HPM_CNT_WIDTH              => HPM_CNT_WIDTH,
-    -- Atomic Memory Access - Reservation Set Granularity --
-    AMO_RVS_GRANULARITY        => AMO_RVS_GRANULARITY,
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN            => MEM_INT_IMEM_EN,
     MEM_INT_IMEM_SIZE          => MEM_INT_IMEM_SIZE,
@@ -330,10 +331,8 @@ begin
     XIP_CACHE_BLOCK_SIZE       => XIP_CACHE_BLOCK_SIZE,
     -- External Interrupts Controller --
     XIRQ_NUM_CH                => XIRQ_NUM_CH,
-    XIRQ_TRIGGER_TYPE          => XIRQ_TRIGGER_TYPE,
-    XIRQ_TRIGGER_POLARITY      => XIRQ_TRIGGER_POLARITY,
     -- Processor peripherals --
-    IO_GPIO_NUM                => IO_GPIO_NUM,
+    IO_GPIO_NUM                => num_gpio_c,
     IO_MTIME_EN                => IO_MTIME_EN,
     IO_UART0_EN                => IO_UART0_EN,
     IO_UART0_RX_FIFO           => IO_UART0_RX_FIFO,
@@ -370,27 +369,29 @@ begin
     clk_i          => clk,
     rstn_i         => resetn,
     -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
-    jtag_trst_i    => jtag_trst_i,
     jtag_tck_i     => jtag_tck_i,
     jtag_tdi_i     => jtag_tdi_i,
     jtag_tdo_o     => jtag_tdo_o,
     jtag_tms_i     => jtag_tms_i,
     -- External bus interface (available if XBUS_EN = true) --
     xbus_adr_o     => wb_core.adr,
-    xbus_dat_i     => wb_core.di,
     xbus_dat_o     => wb_core.do,
+    xbus_tag_o     => wb_core.tag,
     xbus_we_o      => wb_core.we,
     xbus_sel_o     => wb_core.sel,
     xbus_stb_o     => open,
     xbus_cyc_o     => wb_core.cyc,
+    xbus_dat_i     => wb_core.di,
     xbus_ack_i     => wb_core.ack,
     xbus_err_i     => wb_core.err,
     -- Stream Link Interface (available if IO_SLINK_EN = true) --
     slink_rx_dat_i => s1_axis_tdata,
+    slink_rx_src_i => s1_axis_tid,
     slink_rx_val_i => s1_axis_tvalid,
     slink_rx_lst_i => s1_axis_tlast,
     slink_rx_rdy_o => s1_axis_tready,
     slink_tx_dat_o => s0_axis_tdata,
+    slink_tx_dst_o => s0_axis_tdest,
     slink_tx_val_o => s0_axis_tvalid,
     slink_tx_lst_o => s0_axis_tlast,
     slink_tx_rdy_i => s0_axis_tready,
@@ -400,8 +401,8 @@ begin
     xip_dat_i      => xip_dat_i,
     xip_dat_o      => xip_dat_o,
     -- GPIO (available if IO_GPIO_NUM > 0) --
-    gpio_o         => gpio_o,
-    gpio_i         => gpio_i,
+    gpio_o         => gpio_o_aux,
+    gpio_i         => gpio_i_aux,
     -- primary UART0 (available if IO_UART0_EN = true) --
     uart0_txd_o    => uart0_txd_o,
     uart0_rxd_i    => uart0_rxd_i,
@@ -426,7 +427,7 @@ begin
     onewire_i      => onewire_i,
     onewire_o      => onewire_o,
     -- PWM available if IO_PWM_NUM_CH > 0) --
-    pwm_o          => pwm_o,
+    pwm_o          => pwm_o_aux,
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i       => cfs_in_i,
     cfs_out_o      => cfs_out_o,
@@ -434,10 +435,8 @@ begin
     neoled_o       => neoled_o,
     -- Machine timer system time (available if IO_MTIME_EN = true) --
     mtime_time_o   => mtime_time_o,
-    -- GPTMR timer capture (available if IO_GPTMR_EN = true) --
-    gptmr_trig_i   => gptmr_trig_i,
     -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
-    xirq_i         => xirq_i,
+    xirq_i         => xirq_i_aux,
     -- CPU Interrupts --
     mtime_irq_i    => mtime_irq_i,
     msw_irq_i      => msw_irq_i,
@@ -445,36 +444,64 @@ begin
   );
 
 
-  -- Wishbone to AXI4-Lite Bridge -----------------------------------------------------------
+  -- Variable-Sized Ports -------------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------------
+
+  -- GPIO input --
+  gpio_in_mapping: process(gpio_i)
+  begin
+    gpio_i_aux <= (others => '0');
+    for i in 0 to IO_GPIO_IN_NUM-1 loop
+      gpio_i_aux(i) <= gpio_i(i);
+    end loop;
+  end process gpio_in_mapping;
+
+  -- GPIO output --
+  gpio_out_mapping:
+  for i in 0 to IO_GPIO_OUT_NUM-1 generate
+    gpio_o(i) <= gpio_o_aux(i);
+  end generate;
+
+  -- PWM --
+  pwm_mapping:
+  for i in 0 to IO_PWM_NUM_CH-1 generate
+    pwm_o(i) <= pwm_o_aux(i);
+  end generate;
+
+  -- XIRQ --
+  xirq_mapping: process(xirq_i)
+  begin
+    xirq_i_aux <= (others => '0');
+    for i in 0 to XIRQ_NUM_CH-1 loop
+      xirq_i_aux(i) <= xirq_i(i);
+    end loop;
+  end process xirq_mapping;
+
+
+  -- Wishbone-to-AXI4-Lite Bridge -----------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   axi_arbiter: process(resetn, clk)
   begin
     if (resetn = '0') then
-      axi_ctrl.radr_received <= '0';
-      axi_ctrl.wadr_received <= '0';
-      axi_ctrl.wdat_received <= '0';
+      axi_radr_received <= '0';
+      axi_wadr_received <= '0';
+      axi_wdat_received <= '0';
     elsif rising_edge(clk) then
-      if (wb_core.cyc = '0') then -- idle
-        axi_ctrl.radr_received <= '0';
-        axi_ctrl.wadr_received <= '0';
-        axi_ctrl.wdat_received <= '0';
-      else -- busy
-        -- "read address received" flag --
-        if (wb_core.we = '0') then -- pending READ
+      if (wb_core.cyc = '0') then
+        axi_radr_received <= '0';
+        axi_wadr_received <= '0';
+        axi_wdat_received <= '0';
+      else -- pending access
+        if (wb_core.we = '0') then -- read
           if (m_axi_arready = '1') then -- read address received by interconnect?
-            axi_ctrl.radr_received <= '1';
+            axi_radr_received <= '1';
           end if;
-        end if;
-        -- "write address received" flag --
-        if (wb_core.we = '1') then -- pending WRITE
+        else -- write
           if (m_axi_awready = '1') then -- write address received by interconnect?
-            axi_ctrl.wadr_received <= '1';
+            axi_wadr_received <= '1';
           end if;
-        end if;
-        -- "write data received" flag --
-        if (wb_core.we = '1') then -- pending WRITE
           if (m_axi_wready = '1') then -- write data received by interconnect?
-            axi_ctrl.wdat_received <= '1';
+            axi_wdat_received <= '1';
           end if;
         end if;
       end if;
@@ -484,8 +511,8 @@ begin
 
   -- read address channel --
   m_axi_araddr  <= wb_core.adr;
-  m_axi_arvalid <= wb_core.cyc and (not wb_core.we) and (not axi_ctrl.radr_received);
-  m_axi_arprot  <= "000";
+  m_axi_arvalid <= wb_core.cyc and (not wb_core.we) and (not axi_radr_received);
+  m_axi_arprot  <= wb_core.tag;
 
   -- read data channel --
   m_axi_rready  <= wb_core.cyc and (not wb_core.we);
@@ -493,12 +520,12 @@ begin
 
   -- write address channel --
   m_axi_awaddr  <= wb_core.adr;
-  m_axi_awvalid <= wb_core.cyc and wb_core.we and (not axi_ctrl.wadr_received);
-  m_axi_awprot  <= "000";
+  m_axi_awvalid <= wb_core.cyc and wb_core.we and (not axi_wadr_received);
+  m_axi_awprot  <= wb_core.tag;
 
   -- write data channel --
   m_axi_wdata   <= wb_core.do;
-  m_axi_wvalid  <= wb_core.cyc and wb_core.we and (not axi_ctrl.wdat_received);
+  m_axi_wvalid  <= wb_core.cyc and wb_core.we and (not axi_wdat_received);
   m_axi_wstrb   <= wb_core.sel;
 
   -- write response channel --
@@ -510,22 +537,20 @@ begin
   begin
     wb_core.ack <= '0'; -- default
     wb_core.err <= '0'; -- default
-    if (wb_core.cyc = '1') then -- bus operation in progress
-      if (wb_core.we = '1') then -- write operation
-        if (m_axi_bvalid = '1') then -- valid response
-          if (m_axi_bresp = "00") then -- status check
-            wb_core.ack <= '1'; -- OK
-          else
-            wb_core.err <= '1'; -- ERROR
-          end if;
+    if (wb_core.we = '1') then -- write operation
+      if (m_axi_bvalid = '1') then -- valid write response
+        if (m_axi_bresp = "00") then -- status check
+          wb_core.ack <= '1'; -- OK
+        else
+          wb_core.err <= '1'; -- ERROR
         end if;
-      else -- read operation
-        if (m_axi_rvalid = '1') then -- valid response
-          if (m_axi_rresp = "00") then -- status check
-            wb_core.ack <= '1'; -- OK
-          else
-            wb_core.err <= '1'; -- ERROR
-          end if;
+      end if;
+    else -- read operation
+      if (m_axi_rvalid = '1') then -- valid read response
+        if (m_axi_rresp = "00") then -- status check
+          wb_core.ack <= '1'; -- OK
+        else
+          wb_core.err <= '1'; -- ERROR
         end if;
       end if;
     end if;

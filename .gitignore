@@ -6,6 +6,9 @@ __pycache__
 
 # generated app files
 *.bin
+*.coe
+*.mem
+*.mif
 *.o
 *.elf
 *.asm

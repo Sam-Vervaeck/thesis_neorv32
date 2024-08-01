@@ -1,36 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - CFU: Custom Instructions Example Program >>                                      #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 
 /**********************************************************************//**
@@ -57,21 +31,22 @@
 
 
 /**********************************************************************//**
- * @name Define macros for easy custom instruction wrapping
+ * @name Define macros for easy CFU instruction wrapping
  **************************************************************************/
 /**@{*/
-#define xtea_hw_init(sum)           neorv32_cfu_r3_instr(0b0000000, 0b100, sum, 0)
-#define xtea_hw_enc_v0_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b000, v0, v1)
-#define xtea_hw_enc_v1_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b001, v0, v1)
-#define xtea_hw_dec_v0_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b010, v0, v1)
-#define xtea_hw_dec_v1_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b011, v0, v1)
+#define xtea_hw_init(sum)           neorv32_cfu_r3_instr(0b0000000, 0b100, sum, 0 )
+#define xtea_hw_enc_v0_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b000, v0,  v1)
+#define xtea_hw_enc_v1_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b001, v0,  v1)
+#define xtea_hw_dec_v0_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b010, v0,  v1)
+#define xtea_hw_dec_v1_step(v0, v1) neorv32_cfu_r3_instr(0b0000000, 0b011, v0,  v1)
+#define xtea_hw_illegal_inst()      neorv32_cfu_r3_instr(0b0000000, 0b111, 0,   0 )
 /**@}*/
 
 // The CFU custom instructions can be used as plain C functions as they are simple "intrinsics".
 // There are 4 "prototype primitives" for the CFU instructions (define in sw/lib/include/neorv32_cfu.h):
 //
-// > neorv32_cfu_r3_instr(funct7, funct3, rs1, rs2) - for r3-type instructions (custom-0 opcode)
-// > neorv32_cfu_r4_instr(funct3, rs1, rs2, rs3)    - for r4-type instructions (custom-1 opcode)
+// > neorv32_cfu_r3_instr(funct7, funct3, rs1, rs2) - for r3-type instructions  (custom-0 opcode)
+// > neorv32_cfu_r4_instr(funct3, rs1, rs2, rs3)    - for r4-type instructions  (custom-1 opcode)
 // > neorv32_cfu_r5_instr_a(rs1, rs2, rs3, rs4)     - for r5-type instruction A (custom-2 opcode)
 // > neorv32_cfu_r5_instr_b(rs1, rs2, rs3, rs4)     - for r5-type instruction B (custom-3 opcode)
 //
@@ -92,34 +67,22 @@
 /**@{*/
 /** XTEA delta (round-key update) */
 const uint32_t xtea_delta = 0x9e3779b9;
+
 /** Encryption/decryption key (128-bit) */
 const uint32_t key[4] = {0x207230ba, 0x1ffba710, 0xc45271ef, 0xdd01768a};
+
 /** Encryption input data */
 uint32_t input_data[DATA_NUM];
+
 /** Encryption results */
 uint32_t cypher_data_sw[DATA_NUM], cypher_data_hw[DATA_NUM];
+
 /** Decryption results */
 uint32_t plain_data_sw[DATA_NUM], plain_data_hw[DATA_NUM];
+
 /** Timing data */
 uint32_t time_enc_sw, time_enc_hw, time_dec_sw, time_dec_hw;
 /**@}*/
-
-
-/**********************************************************************//**
- * Pseudo-random number generator (to generate deterministic test data).
- *
- * @return Random data (32-bit).
- **************************************************************************/
-uint32_t xorshift32(void) {
-
-  static uint32_t x32 = 314159265;
-
-  x32 ^= x32 << 13;
-  x32 ^= x32 >> 17;
-  x32 ^= x32 << 5;
-
-  return x32;
-}
 
 
 /**********************************************************************//**
@@ -243,7 +206,7 @@ int main() {
 
   // generate "random" data for the plain text
   for (i=0; i<DATA_NUM; i++) {
-    input_data[i] = xorshift32();
+    input_data[i] = neorv32_aux_xorshift32();
   }
 
 
@@ -351,6 +314,12 @@ int main() {
   neorv32_uart0_printf("DEC SW = %u cycles\n", time_dec_sw);
   neorv32_uart0_printf("DEC HW = %u cycles\n", time_dec_hw);
 
+
+  // ----------------------------------------------------------
+  // Execute an unimplemented CFU instruction word
+  // ----------------------------------------------------------
+  neorv32_uart0_printf("\nExecuting non-implemented CFU instruction (raise ILLEGAL INSTRUCTION exception)...\n");
+  xtea_hw_illegal_inst();
 
 
   neorv32_uart0_printf("\nCFU demo program completed.\n");

@@ -1,36 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - SLINK Demo Program >>                                                            #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 
 /**********************************************************************//**
@@ -52,7 +26,6 @@
 
 // Prototypes
 void slink_firq_handler(void);
-uint32_t xorshift32(void);
 
 
 /**********************************************************************//**
@@ -105,7 +78,7 @@ int main() {
   neorv32_uart0_printf("-------- TX Demo --------\n");
 
   for (i=0; i<(rx_depth+tx_depth); i++) {
-    slink_data = xorshift32();
+    slink_data = neorv32_aux_xorshift32();
     neorv32_uart0_printf("[%i] Sending 0x%x... ", i, slink_data);
 
     slink_rc = neorv32_slink_tx_status();
@@ -161,7 +134,7 @@ int main() {
   neorv32_cpu_csr_set(CSR_MSTATUS, 1 << CSR_MSTATUS_MIE); // enable machine-mode interrupts
 
   for (i=0; i<4; i++) {
-    slink_data = xorshift32();
+    slink_data = neorv32_aux_xorshift32();
     neorv32_uart0_printf("[%i] Sending 0x%x... ", i, slink_data);
 
     slink_rc = neorv32_slink_tx_status();
@@ -186,21 +159,4 @@ int main() {
 void slink_firq_handler(void) {
 
   neorv32_uart0_printf(" <<RX data: 0x%x>> ", neorv32_slink_get());
-}
-
-
-/**********************************************************************//**
- * Simple pseudo random number generator.
- *
- * @return Random number.
- **************************************************************************/
-uint32_t xorshift32(void) {
-
-  static uint32_t x32 = 314159265;
-
-  x32 ^= x32 << 13;
-  x32 ^= x32 >> 17;
-  x32 ^= x32 << 5;
-
-  return x32;
 }

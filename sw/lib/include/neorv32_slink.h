@@ -1,45 +1,23 @@
-// #################################################################################################
-// # << NEORV32: neorv32_slink.h - Stream Link Interface HW Driver >>                              #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
-
-/**********************************************************************//**
+/**
  * @file neorv32_slink.h
  * @brief Stream Link Interface HW driver header file.
- **************************************************************************/
+ *
+ * @see https://stnolting.github.io/neorv32/sw/files.html
+ */
 
 #ifndef neorv32_slink_h
 #define neorv32_slink_h
+
+#include <stdint.h>
+
 
 /**********************************************************************//**
  * @name IO Device: Stream Link Interface (SLINK)
@@ -47,10 +25,10 @@
 /**@{*/
 /** SLINK module prototype */
 typedef volatile struct __attribute__((packed,aligned(4))) {
-  uint32_t CTRL;           /**< offset 0: control register (#NEORV32_SLINK_CTRL_enum) */
-  const uint32_t reserved; /**< offset 4: reserved */
-  uint32_t DATA;           /**< offset 8: RX/TX data register */
-  uint32_t DATA_LAST;      /**< offset 12: RX/TX data register (+ TX end-of-stream) */
+  uint32_t CTRL;      /**< offset 0: control register (#NEORV32_SLINK_CTRL_enum) */
+  uint32_t ROUTE;     /**< offset 4: routing information (#NEORV32_SLINK_ROUTE_enum) */
+  uint32_t DATA;      /**< offset 8: RX/TX data register */
+  uint32_t DATA_LAST; /**< offset 12: RX/TX data register (+ TX end-of-stream) */
 } neorv32_slink_t;
 
 /** SLINK module hardware access (#neorv32_slink_t) */
@@ -84,6 +62,14 @@ enum NEORV32_SLINK_CTRL_enum {
   SLINK_CTRL_TX_FIFO_MSB   = 31  /**< SLINK control register(31) (r/-): log2(TX FIFO size) MSB */
 };
 
+/** ROUTE register bits */
+enum NEORV32_SLINK_ROUTE_enum {
+  SLINK_ROUTE_DST_LSB = 0, /**< SLINK routing register(0) (r/w): Destination routing information LSB */
+  SLINK_ROUTE_DST_MSB = 3, /**< SLINK routing register(3) (r/w): Destination routing information MSB */
+  SLINK_ROUTE_SRC_LSB = 4, /**< SLINK routing register(4) (r/-): Source routing information LSB */
+  SLINK_ROUTE_SRC_MSB = 7  /**< SLINK routing register(7) (r/-): Source routing information MSB */
+};
+
 enum NEORV32_SLINK_STATUS_enum {
   SLINK_FIFO_EMPTY = 0, /**< FIFO is empty */
   SLINK_FIFO_HALF  = 1, /**< FIFO is at least half full */
@@ -104,6 +90,8 @@ int      neorv32_slink_get_rx_fifo_depth(void);
 int      neorv32_slink_get_tx_fifo_depth(void);
 uint32_t neorv32_slink_get(void);
 uint32_t neorv32_slink_check_last(void);
+void     neorv32_slink_set_dst(uint32_t dst);
+uint32_t neorv32_slink_get_src(void);
 void     neorv32_slink_put(uint32_t tx_data);
 void     neorv32_slink_put_last(uint32_t tx_data);
 int      neorv32_slink_rx_status(void);

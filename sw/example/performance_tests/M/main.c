@@ -1,45 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - Processor Performance Measurement >>                                             #
-// # ********************************************************************************************* #
-// # (c) "AXI", "AXI4" and "AXI4-Lite" are trademarks of Arm Holdings plc.                         #
-// # Note: External MTIME is not supported.                                                        #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2023, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
-
-// #################################################################################################
-// # << NEORV32 -  M instruction timing >>                                                         #
-// # ********************************************************************************************* #
-// # Status: Work in progress                                                                      #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 /**************************************************************************
  * @file riscv_M_inst_timing/main.c
@@ -69,10 +34,10 @@ int main() {
   // Disable compilation by default
   #ifndef RUN_CHECK
     #warning Program HAS NOT BEEN COMPILED! Use >>make USER_FLAGS+=-DRUN_CHECK clean_all exe<< to compile it.
-  
+
     // inform the user if you are actually executing this
     neorv32_uart0_printf("ERROR! Program has not been compiled. Use >>make USER_FLAGS+=-DRUN_CHECK clean_all exe<< to compile it.\n");
-  
+
     return 1;
   #endif
 
@@ -84,7 +49,7 @@ int main() {
     #define rv32M_mult  1
     #define rv32M_div  1
     #define rv32M_rem  1
-  #endif  
+  #endif
   #ifndef rv32M_mult
     #define rv32M_mult  0
   #endif
@@ -98,8 +63,8 @@ int main() {
   // time offset values
 
   // setup input variables
-  uint startTime, stopTime;
-  uint totalTime = 0;
+  uint32_t startTime, stopTime;
+  uint32_t totalTime = 0;
 
   #ifndef instCalls
     #define instCalls 256
@@ -148,7 +113,7 @@ int main() {
   #if rv32M_mult == 1
     instToTest += 4;
     // set up compute variables
-    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1 
+    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1
     __asm__ ("li a2, 12345678\n\t"); // set a2 to 2
     startTime = neorv32_cpu_csr_read(CSR_MCYCLE);
     for (i = 0; i < instLoop; i++) {
@@ -201,7 +166,7 @@ int main() {
       neorv32_uart0_printf("\ntotal %d cyc\n", totalTime);
     #endif
     neorv32_uart0_printf("\nmulh rd,rs1,rs2 inst. %d cyc\n", (stopTime - startTime)/(instLoop * instCalls));
-  
+
     startTime = neorv32_cpu_csr_read(CSR_MCYCLE);
     for (i = 0; i < instLoop; i++) {
       #if instCalls == 16
@@ -227,7 +192,7 @@ int main() {
       neorv32_uart0_printf("\ntotal %d cyc\n", totalTime);
     #endif
     neorv32_uart0_printf("\nmulhsu rd,rs1,rs2 inst. %d cyc\n", (stopTime - startTime)/(instLoop * instCalls));
-  
+
     startTime = neorv32_cpu_csr_read(CSR_MCYCLE);
     for (i = 0; i < instLoop; i++) {
       #if instCalls == 16
@@ -253,13 +218,13 @@ int main() {
       neorv32_uart0_printf("\ntotal %d cyc\n", totalTime);
     #endif
     neorv32_uart0_printf("\nmulhu rd,imm inst. %d cyc\n", (stopTime - startTime)/(instLoop * instCalls));
-  
+
   #endif
 
   #if rv32M_div == 1
     instToTest += 2;
     // set up compute variables
-    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1 
+    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1
     __asm__ ("li a2, 12345678\n\t"); // set a2 to 2
     startTime = neorv32_cpu_csr_read(CSR_MCYCLE);
     for (i = 0; i < instLoop; i++) {
@@ -312,13 +277,13 @@ int main() {
       neorv32_uart0_printf("\ntotal %d cyc\n", totalTime);
     #endif
     neorv32_uart0_printf("\ndivu rd,rs1,shamt inst. %d cyc\n", (stopTime - startTime)/(instLoop * instCalls));
-  
+
   #endif
 
   #if rv32M_rem == 1
     instToTest += 2;
     // set up compute variables
-    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1 
+    __asm__ ("li a1, 87654321\n\t"); // set a1 to 1
     __asm__ ("li a2, 12345678\n\t"); // set a2 to 2
     startTime = neorv32_cpu_csr_read(CSR_MCYCLE);
     for (i = 0; i < instLoop; i++) {
@@ -371,7 +336,7 @@ int main() {
       neorv32_uart0_printf("\ntotal %d cyc\n", totalTime);
     #endif
     neorv32_uart0_printf("\nremu rd,rs1,rs2 inst. %d cyc\n", (stopTime - startTime)/(instLoop * instCalls));
-  
+
   #endif
 
   int instructions  = instToTest * instLoop * instCalls;
@@ -385,6 +350,6 @@ int main() {
 
   // Stop simulation
   if (neorv32_gpio_available()) {
-    neorv32_gpio_pin_set(32);
+    neorv32_gpio_pin_set(32, 1);
   }
 }

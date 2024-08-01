@@ -100,14 +100,16 @@ architecture neorv32_tb_rtl of neorv32_tb is
   signal slink_val : std_ulogic;
   signal slink_lst : std_ulogic;
   signal slink_rdy : std_ulogic;
+  signal slink_id  : std_ulogic_vector(3 downto 0);
 
   -- Wishbone bus --
   type wishbone_t is record
     addr  : std_ulogic_vector(31 downto 0); -- address
     wdata : std_ulogic_vector(31 downto 0); -- master write data
     rdata : std_ulogic_vector(31 downto 0); -- master read data
+    tag   : std_ulogic_vector(2 downto 0); -- access tag
     we    : std_ulogic; -- write enable
-    sel   : std_ulogic_vector(03 downto 0); -- byte enable
+    sel   : std_ulogic_vector(3 downto 0); -- byte enable
     stb   : std_ulogic; -- strobe
     cyc   : std_ulogic; -- valid cycle
     ack   : std_ulogic; -- transfer acknowledge
@@ -222,8 +224,6 @@ begin
     -- Hardware Performance Monitors (HPM) --
     HPM_NUM_CNTS                 => 12,            -- number of implemented HPM counters (0..29)
     HPM_CNT_WIDTH                => 40,            -- total size of HPM counters (0..64)
-    -- Atomic Memory Access - Reservation Set Granularity --
-    AMO_RVS_GRANULARITY          => 4,             -- size in bytes, has to be a power of 2, min 4
     -- Internal Instruction memory --
     MEM_INT_IMEM_EN              => int_imem_c ,   -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE            => imem_size_c,   -- size of processor-internal instruction memory in bytes
@@ -248,8 +248,6 @@ begin
     XIP_CACHE_BLOCK_SIZE         => 256,           -- block size in bytes (min 4), has to be a power of 2
     -- External Interrupts Controller (XIRQ) --
     XIRQ_NUM_CH                  => 32,            -- number of external IRQ channels (0..32)
-    XIRQ_TRIGGER_TYPE            => (others => '1'), -- trigger type: 0=level, 1=edge
-    XIRQ_TRIGGER_POLARITY        => (others => '1'), -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
     -- Processor peripherals --
     IO_GPIO_NUM                  => 64,            -- number of GPIO input/output pairs (0..64)
     IO_MTIME_EN                  => true,          -- implement machine system timer (MTIME)?
@@ -288,7 +286,6 @@ begin
     clk_i          => clk_gen,         -- global clock, rising edge
     rstn_i         => rst_gen,         -- global reset, low-active, async
     -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
-    jtag_trst_i    => '1',             -- low-active TAP reset (optional)
     jtag_tck_i     => '0',             -- serial clock
     jtag_tdi_i     => '0',             -- serial data input
     jtag_tdo_o     => open,            -- serial data output
@@ -296,6 +293,7 @@ begin
     -- External bus interface (available if XBUS_EN = true) --
     xbus_adr_o     => wb_cpu.addr,     -- address
     xbus_dat_o     => wb_cpu.wdata,    -- write data
+    xbus_tag_o     => wb_cpu.tag,      -- access tag
     xbus_we_o      => wb_cpu.we,       -- read/write
     xbus_sel_o     => wb_cpu.sel,      -- byte enable
     xbus_stb_o     => wb_cpu.stb,      -- strobe
@@ -305,12 +303,14 @@ begin
     xbus_err_i     => wb_cpu.err,      -- transfer error
     -- Stream Link Interface (available if IO_SLINK_EN = true) --
     slink_rx_dat_i => slink_dat,       -- RX input data
+    slink_rx_src_i => slink_id,        -- RX source routing information
     slink_rx_val_i => slink_val,       -- RX valid input
-    slink_rx_lst_i => slink_lst,       -- last element of stream
+    slink_rx_lst_i => slink_lst,       -- RX last element of stream
     slink_rx_rdy_o => slink_rdy,       -- RX ready to receive
     slink_tx_dat_o => slink_dat,       -- TX output data
+    slink_tx_dst_o => slink_id,        -- TX destination routing information
     slink_tx_val_o => slink_val,       -- TX valid output
-    slink_tx_lst_o => slink_lst,       -- last element of stream
+    slink_tx_lst_o => slink_lst,       -- TX last element of stream
     slink_tx_rdy_i => slink_rdy,       -- TX ready to send
     -- XIP (execute in place via SPI) signals (available if XIP_EN = true) --
     xip_csn_o      => open,            -- chip-select, low-active
@@ -357,8 +357,6 @@ begin
     neoled_o       => open,            -- async serial data line
     -- Machine timer system time (available if IO_MTIME_EN = true) --
     mtime_time_o   => open,
-    -- GPTMR timer capture (available if IO_GPTMR_EN = true) --
-    gptmr_trig_i   => gpio(63),        -- capture trigger
     -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
     xirq_i         => gpio(31 downto 0), -- IRQ channels
     -- CPU Interrupts --
@@ -384,11 +382,11 @@ begin
   -- 1-Wire termination (pull-up) --
   onewire <= 'H';
 
-  -- SPI/SDI echo --
-  sdi_clk <= spi_clk;
-  sdi_csn <= spi_csn(7);
-  sdi_di  <= spi_do;
-  spi_di  <= sdi_do when (spi_csn(7) = '0') else spi_do;
+  -- SPI/SDI echo with propagation delay --
+  sdi_clk <= spi_clk after 40 ns;
+  sdi_csn <= spi_csn(7) after 40 ns;
+  sdi_di  <= spi_do after 40 ns;
+  spi_di  <= sdi_do when (spi_csn(7) = '0') else spi_do after 40 ns;
 
   uart0_checker: entity work.uart_rx
     generic map (uart0_rx_handle)

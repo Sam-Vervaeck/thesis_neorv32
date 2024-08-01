@@ -1,36 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - DMA Demo Program >>                                                              #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 
 /**********************************************************************//**
@@ -75,6 +49,7 @@ int main() {
 
   // setup UART at default baud rate, no interrupts
   neorv32_uart0_setup(BAUD_RATE, 0);
+
 
   // intro
   neorv32_uart0_printf("\n<<< DMA Controller Demo Program >>>\n\n");
@@ -263,7 +238,7 @@ int main() {
     // configure GPTMR
     neorv32_gptmr_setup(CLK_PRSC_2, // GPTM clock = 1/2 main clock
                         4096,       // counter threshold for triggering IRQ
-                        1);         // enable timer-match interrupt
+                        0);         // single-shot mode
 
     // configure transfer type
     cmd = DMA_CMD_B2B       | // read source in byte quantities, write destination in byte quantities
@@ -275,7 +250,8 @@ int main() {
                               (uint32_t)(&dma_dst[0]), // destination array base address
                                16,                     // number of elements to transfer: 16
                                cmd,                    // transfer type configuration
-                               GPTMR_FIRQ_PENDING);    // trigger transfer on pending GPTMR interrupt
+                               GPTMR_FIRQ_PENDING,     // trigger transfer on pending GPTMR interrupt
+                               0);                     // trigger on rising-edge of selected FIRQ channel
 
     // sleep until interrupt (from DMA)
     neorv32_cpu_sleep();
@@ -294,6 +270,7 @@ int main() {
       neorv32_uart0_printf("Transfer succeeded!\n");
     }
 
+    neorv32_gptmr_disable(); // disable GPTMR
     show_arrays();
   }
   else {
@@ -301,6 +278,40 @@ int main() {
   }
 
 
+  // ----------------------------------------------------------
+  // example 5
+  // ----------------------------------------------------------
+  neorv32_uart0_printf("\nExample 5: Automatic UART0 echo without CPU.\n");
+  neorv32_uart0_printf(  "           The UART RX FIRQ channel is used to trigger the DMA.\n\n");
+
+  // note that NO CPU interrupts are enabled here
+  neorv32_cpu_csr_write(CSR_MIE, 0);
+  neorv32_cpu_csr_clr(CSR_MSTATUS, 1 << CSR_MSTATUS_MIE);
+
+  // clear UART0 RX FIFO
+  neorv32_uart0_rx_clear();
+
+  // configure DMA-triggering interrupt: UART0 RX
+  NEORV32_UART0->CTRL |= (uint32_t)(1 << UART_CTRL_IRQ_RX_NEMPTY); // RX FIFO not empty interrupt
+
+  // configure transfer type
+  cmd = DMA_CMD_W2W       | // read source in word quantities, write destination in word quantities
+        DMA_CMD_SRC_CONST | // constant source address
+        DMA_CMD_DST_CONST;  // constant address source
+
+  // configure automatic DMA transfer
+  neorv32_dma_transfer_auto((uint32_t)(&NEORV32_UART0->DATA), // source: UART0 RX data register
+                            (uint32_t)(&NEORV32_UART0->DATA), // destination: UART0 TX data register
+                             1,                               // number of elements to transfer: 1
+                             cmd,                             // transfer type configuration
+                             UART0_RX_FIRQ_PENDING,           // trigger transfer on pending UART0 RX interrupt
+                             1);                              // trigger on hihg-level of selected FIRQ channel
+
+  // put CPU into eternal sleep mode
+  neorv32_cpu_sleep();
+
+
+  // should never be reached
   neorv32_uart0_printf("\nProgram completed.\n");
   return 0;
 }
@@ -328,7 +339,7 @@ void show_arrays(void) {
  **************************************************************************/
 void dma_firq_handler(void) {
 
-  neorv32_gptmr_trigger_matched(); // clear GPTMR timer-match interrupt
+  neorv32_gptmr_irq_ack(); // clear GPTMR timer-match interrupt
   NEORV32_DMA->CTRL &= ~(1<<DMA_CTRL_DONE); // clear DMA-done interrupt
   neorv32_gptmr_disable(); // disable GPTMR
   neorv32_uart0_printf("<<DMA interrupt>>\n");

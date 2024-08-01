@@ -1,35 +1,12 @@
-#################################################################################################
-# << NEORV32 - Application Makefile >>                                                          #
-# ********************************************************************************************* #
-# BSD 3-Clause License                                                                          #
-#                                                                                               #
-# The NEORV32 RISC-V Processor, https://github.com/stnolting/neorv32                            #
-# Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-#                                                                                               #
-# Redistribution and use in source and binary forms, with or without modification, are          #
-# permitted provided that the following conditions are met:                                     #
-#                                                                                               #
-# 1. Redistributions of source code must retain the above copyright notice, this list of        #
-#    conditions and the following disclaimer.                                                   #
-#                                                                                               #
-# 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-#    conditions and the following disclaimer in the documentation and/or other materials        #
-#    provided with the distribution.                                                            #
-#                                                                                               #
-# 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-#    endorse or promote products derived from this software without specific prior written      #
-#    permission.                                                                                #
-#                                                                                               #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-# OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-# COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-# AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-# OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-#################################################################################################
+# ================================================================================ #
+# NEORV32 Application Software Makefile                                            #
+# -------------------------------------------------------------------------------- #
+# The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              #
+# Copyright (c) NEORV32 contributors.                                              #
+# Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  #
+# Licensed under the BSD-3-Clause license, see LICENSE for details.                #
+# SPDX-License-Identifier: BSD-3-Clause                                            #
+# ================================================================================ #
 
 
 # -----------------------------------------------------------------------------
@@ -98,6 +75,9 @@ APP_EXE  = neorv32_exe.bin
 APP_ELF  = main.elf
 APP_HEX  = neorv32_raw_exe.hex
 APP_BIN  = neorv32_raw_exe.bin
+APP_COE  = neorv32_raw_exe.coe
+APP_MEM  = neorv32_raw_exe.mem
+APP_MIF  = neorv32_raw_exe.mif
 APP_ASM  = main.asm
 APP_IMG  = neorv32_application_image.vhd
 BOOT_IMG = neorv32_bootloader_image.vhd
@@ -121,6 +101,7 @@ OBJ = $(SRC:%=%.o)
 CC      = $(RISCV_PREFIX)gcc
 OBJDUMP = $(RISCV_PREFIX)objdump
 OBJCOPY = $(RISCV_PREFIX)objcopy
+READELF = $(RISCV_PREFIX)readelf
 SIZE    = $(RISCV_PREFIX)size
 GDB     = $(RISCV_PREFIX)gdb
 
@@ -132,7 +113,7 @@ IMAGE_GEN = $(NEORV32_EXG_PATH)/image_gen
 
 # Compiler & linker flags
 CC_OPTS  = -march=$(MARCH) -mabi=$(MABI) $(EFFORT) -Wall -ffunction-sections -fdata-sections -nostartfiles -mno-fdiv
-CC_OPTS += -mstrict-align -mbranch-cost=10 -g -Wl,--gc-sections
+CC_OPTS += -mstrict-align -mbranch-cost=10 -g -Wl,--gc-sections -ffp-contract=off
 CC_OPTS += $(USER_FLAGS)
 LD_LIBS =  -lm -lc -lgcc
 LD_LIBS += $(USER_LIBS)
@@ -156,22 +137,23 @@ NEO_ASFLAGS = $(CC_FLAGS) $(ASFLAGS)
 .PHONY: check info help elf_info clean clean_all bootloader
 .DEFAULT_GOAL := help
 
-# 'compile' is still here for compatibility
 asm:     $(APP_ASM)
 elf:     $(APP_ELF)
 exe:     $(APP_EXE)
 hex:     $(APP_HEX)
 bin:     $(APP_BIN)
-compile: $(APP_EXE)
+coe:     $(APP_COE)
+mem:     $(APP_MEM)
+mif:     $(APP_MIF)
 image:   $(APP_IMG)
 install: image install-$(APP_IMG)
-all:     $(APP_ASM) $(APP_EXE) $(APP_IMG) install hex bin
+all:     $(APP_ASM) $(APP_EXE) $(APP_HEX) $(APP_BIN) $(APP_COE) $(APP_MEM) $(APP_MIF) $(APP_IMG) install hex bin
 
 # Check if making bootloader
 # Use different base address and length for instruction memory/"rom" (BOOTROM instead of IMEM)
-# Also define "make_bootloader" symbol for crt0.S, add debug symbols and use link-time optimization
-target bootloader: CC_OPTS += -Wl,--defsym=make_bootloader=1 -Dmake_bootloader -g -flto
-target bl_image:   CC_OPTS += -Wl,--defsym=make_bootloader=1 -Dmake_bootloader -g -flto
+# Also define "MAKE_BOOTLOADER" symbol for simplified code when building the bootloader
+target bootloader: CC_OPTS += -Wl,--defsym=MAKE_BOOTLOADER=1 -DMAKE_BOOTLOADER -g -flto
+target bl_image:   CC_OPTS += -Wl,--defsym=MAKE_BOOTLOADER=1 -DMAKE_BOOTLOADER -g -flto
 
 
 # -----------------------------------------------------------------------------
@@ -252,6 +234,21 @@ $(APP_BIN): main.bin $(IMAGE_GEN)
 	@set -e
 	@$(IMAGE_GEN) -raw_bin $< $@ $(shell basename $(CURDIR))
 
+# Generate NEORV32 RAW executable image in COE format
+$(APP_COE): main.bin $(IMAGE_GEN)
+	@set -e
+	@$(IMAGE_GEN) -raw_coe $< $@ $(shell basename $(CURDIR))
+
+# Generate NEORV32 RAW executable image in MIF format
+$(APP_MIF): main.bin $(IMAGE_GEN)
+	@set -e
+	@$(IMAGE_GEN) -raw_mif $< $@ $(shell basename $(CURDIR))
+
+# Generate NEORV32 RAW executable image in MEM format
+$(APP_MEM): main.bin $(IMAGE_GEN)
+	@set -e
+	@$(IMAGE_GEN) -raw_mem $< $@ $(shell basename $(CURDIR))
+
 
 # -----------------------------------------------------------------------------
 # Bootloader targets
@@ -275,10 +272,10 @@ bootloader: bl_image install-$(BOOT_IMG)
 # Check toolchain
 # -----------------------------------------------------------------------------
 check: $(IMAGE_GEN)
-	@echo "---------------- Check: NEORV32_HOME folder ----------------"
-ifneq ($(shell [ -e $(NEORV32_HOME_MARKER) ] && echo 1 || echo 0 ), 1)
-$(error NEORV32_HOME folder not found!)
+ifneq ("$(wildcard $NEORV32_HOME_MARKER)", "")
+	$(error NEORV32_HOME folder not found!)
 endif
+	@echo "---------------- Check: NEORV32_HOME folder ----------------"
 	@echo "NEORV32_HOME: $(NEORV32_HOME)"
 	@echo "---------------- Check: Shell ----------------"
 	@echo ${SHELL}
@@ -289,6 +286,8 @@ endif
 	@$(OBJDUMP) -V
 	@echo "---------------- Check: $(OBJCOPY) ----------------"
 	@$(OBJCOPY) -V
+	@echo "---------------- Check: $(READELF) ----------------"
+	@$(READELF) -v
 	@echo "---------------- Check: $(SIZE) ----------------"
 	@$(SIZE) -V
 	@echo "---------------- Check: NEORV32 image_gen ----------------"
@@ -313,6 +312,9 @@ sim: $(APP_IMG) install
 elf_info: $(APP_ELF)
 	@$(OBJDUMP) -x $(APP_ELF)
 
+elf_sections: $(APP_ELF)
+	@$(READELF) -S $(APP_ELF)
+
 
 # -----------------------------------------------------------------------------
 # Run GDB
@@ -325,7 +327,7 @@ gdb:
 # Clean up
 # -----------------------------------------------------------------------------
 clean:
-	@rm -f *.elf *.o *.bin *.out *.asm *.vhd *.hex .gdb_history
+	@rm -f *.elf *.o *.bin *.coe *.mem *.mif *.out *.asm *.vhd *.hex .gdb_history
 
 clean_all: clean
 	@rm -f $(OBJ) $(IMAGE_GEN)
@@ -335,104 +337,83 @@ clean_all: clean
 # Show configuration
 # -----------------------------------------------------------------------------
 info:
-	@echo "------------------------------------------------------"
-	@echo "-- Project"
-	@echo "------------------------------------------------------"
-	@echo "Project folder:        $(shell basename $(CURDIR))"
-	@echo "Source files:          $(APP_SRC)"
-	@echo "Include folder(s):     $(APP_INC)"
+	@echo "******************************************************"
+	@echo "Project / Makfile Configuration"
+	@echo "******************************************************"
+	@echo "Project folder: $(shell basename $(CURDIR))"
+	@echo "Source files: $(APP_SRC)"
+	@echo "Include folder(s): $(APP_INC)"
 	@echo "ASM include folder(s): $(ASM_INC)"
-	@echo "------------------------------------------------------"
-	@echo "-- NEORV32"
-	@echo "------------------------------------------------------"
 	@echo "NEORV32 home folder (NEORV32_HOME): $(NEORV32_HOME)"
 	@echo "IMAGE_GEN: $(IMAGE_GEN)"
 	@echo "Core source files:"
 	@echo "$(CORE_SRC)"
 	@echo "Core include folder:"
 	@echo "$(NEORV32_INC_PATH)"
-	@echo "------------------------------------------------------"
-	@echo "-- Objects"
-	@echo "------------------------------------------------------"
 	@echo "Project object files:"
 	@echo "$(OBJ)"
-	@echo "------------------------------------------------------"
-	@echo "-- RISC-V CPU"
-	@echo "------------------------------------------------------"
-	@echo "MARCH:          $(MARCH)"
-	@echo "MABI:           $(MABI)"
-	@echo "------------------------------------------------------"
-	@echo "-- Toolchain"
-	@echo "------------------------------------------------------"
-	@echo "CC:             $(CC)"
-	@echo "OBJDUMP:        $(OBJDUMP)"
-	@echo "OBJCOPY:        $(OBJCOPY)"
-	@echo "SIZE:           $(SIZE)"
-	@echo "DEBUGGER:       $(GDB)"
-	@echo "------------------------------------------------------"
-	@echo "-- GDB Arguments"
-	@echo "------------------------------------------------------"
-	@echo "GDB_ARGS:       $(GDB_ARGS)"
-	@echo "------------------------------------------------------"
-	@echo "-- GHDL Run Arguments"
-	@echo "------------------------------------------------------"
-	@echo "GHDL_RUN_FLAGS: $(GHDL_RUN_FLAGS)"
-	@echo "------------------------------------------------------"
-	@echo "-- Libraries"
-	@echo "------------------------------------------------------"
 	@echo "LIBGCC:"
 	@$(CC) -print-libgcc-file-name
 	@echo "SEARCH-DIRS:"
 	@$(CC) -print-search-dirs
-	@echo "------------------------------------------------------"
-	@echo "-- Compiler Flags"
-	@echo "------------------------------------------------------"
-	@echo "USER_FLAGS:     $(USER_FLAGS)"
-	@echo "CC_OPTS:        $(CC_OPTS)"
-	@echo "------------------------------------------------------"
-	@echo "-- Libraries"
-	@echo "------------------------------------------------------"
-	@echo "USER_LIBS:      $(USER_LIBS)"
-	@echo "LD_LIBS:        $(LD_LIBS)"
+	@echo "USER_LIBS: $(USER_LIBS)"
+	@echo "LD_LIBS: $(LD_LIBS)"
+	@echo "MARCH: $(MARCH)"
+	@echo "MABI: $(MABI)"
+	@echo "CC: $(CC)"
+	@echo "OBJDUMP: $(OBJDUMP)"
+	@echo "OBJCOPY: $(OBJCOPY)"
+	@echo "SIZE: $(SIZE)"
+	@echo "DEBUGGER: $(GDB)"
+	@echo "GDB_ARGS: $(GDB_ARGS)"
+	@echo "GHDL_RUN_FLAGS: $(GHDL_RUN_FLAGS)"
+	@echo "USER_FLAGS: $(USER_FLAGS)"
+	@echo "CC_OPTS: $(CC_OPTS)"
 
 
 # -----------------------------------------------------------------------------
 # Help
 # -----------------------------------------------------------------------------
 help:
-	@echo "NEORV32 Software Application Makefile"
+	@echo "NEORV32 Software Makefile"
 	@echo "Find more information at https://github.com/stnolting/neorv32"
 	@echo ""
 	@echo "Targets:"
-	@echo " help       - show this text"
-	@echo " check      - check toolchain"
-	@echo " info       - show makefile/toolchain configuration"
-	@echo " gdb        - run GNU debugging session"
-	@echo " asm        - compile and generate <$(APP_ASM)> assembly listing file for manual debugging"
-	@echo " elf        - compile and generate <$(APP_ELF)> ELF file"
-	@echo " exe        - compile and generate <$(APP_EXE)> executable for upload via default bootloader (binary file, with header)"
-	@echo " bin        - compile and generate <$(APP_BIN)> RAW executable file (binary file, no header)"
-	@echo " hex        - compile and generate <$(APP_HEX)> RAW executable file (hex char file, no header)"
-	@echo " image      - compile and generate VHDL IMEM boot image (for application, no header) in local folder"
-	@echo " install    - compile, generate and install VHDL IMEM boot image (for application, no header)"
-	@echo " sim        - in-console simulation using default/simple testbench and GHDL"
-	@echo " all        - exe + install + hex + bin + asm"
-	@echo " elf_info   - show ELF layout info"
-	@echo " clean      - clean up project home folder"
-	@echo " clean_all  - clean up whole project, core libraries and image generator"
-	@echo " bl_image   - compile and generate VHDL BOOTROM boot image (for bootloader only, no header) in local folder"
-	@echo " bootloader - compile, generate and install VHDL BOOTROM boot image (for bootloader only, no header)"
+	@echo ""
+	@echo "  help         - show this text"
+	@echo "  check        - check toolchain"
+	@echo "  info         - show makefile/toolchain configuration"
+	@echo "  gdb          - run GNU debugging session"
+	@echo "  asm          - compile and generate <$(APP_ASM)> assembly listing file for manual debugging"
+	@echo "  elf          - compile and generate <$(APP_ELF)> ELF file"
+	@echo "  exe          - compile and generate <$(APP_EXE)> executable image file for upload via default bootloader (binary file)"
+	@echo "  bin          - compile and generate <$(APP_BIN)> RAW executable memory image (binary file)"
+	@echo "  hex          - compile and generate <$(APP_HEX)> RAW executable memory image (hex char file)"
+	@echo "  coe          - compile and generate <$(APP_COE)> RAW executable memory image (COE file)"
+	@echo "  mem          - compile and generate <$(APP_MEM)> RAW executable memory image (MEM file)"
+	@echo "  mif          - compile and generate <$(APP_MIF)> RAW executable memory image (MIF file)"
+	@echo "  image        - compile and generate VHDL IMEM boot image (for application, no header) in local folder"
+	@echo "  install      - compile, generate and install VHDL IMEM boot image (for application, no header)"
+	@echo "  sim          - in-console simulation using default/simple testbench and GHDL"
+	@echo "  all          - exe + install + hex + bin + asm"
+	@echo "  elf_info     - show ELF layout info"
+	@echo "  elf_sections - show ELF sections"
+	@echo "  clean        - clean up project home folder"
+	@echo "  clean_all    - clean up whole project, core libraries and image generator"
+	@echo "  bl_image     - compile and generate VHDL BOOTROM boot image (for bootloader only, no header) in local folder"
+	@echo "  bootloader   - compile, generate and install VHDL BOOTROM boot image (for bootloader only, no header)"
 	@echo ""
 	@echo "Variables:"
-	@echo " USER_FLAGS     - Custom toolchain flags [append only]: \"$(USER_FLAGS)\""
-	@echo " USER_LIBS      - Custom libraries [append only]: \"$(USER_LIBS)\""
-	@echo " EFFORT         - Optimization level: \"$(EFFORT)\""
-	@echo " MARCH          - Machine architecture: \"$(MARCH)\""
-	@echo " MABI           - Machine binary interface: \"$(MABI)\""
-	@echo " APP_INC        - C include folder(s) [append only]: \"$(APP_INC)\""
-	@echo " ASM_INC        - ASM include folder(s) [append only]: \"$(ASM_INC)\""
-	@echo " RISCV_PREFIX   - Toolchain prefix: \"$(RISCV_PREFIX)\""
-	@echo " NEORV32_HOME   - NEORV32 home folder: \"$(NEORV32_HOME)\""
-	@echo " GDB_ARGS       - GDB (connection) arguments: \"$(GDB_ARGS)\""
-	@echo " GHDL_RUN_FLAGS - GHDL simulation run arguments: \"$(GHDL_RUN_FLAGS)\""
+	@echo ""
+	@echo "  USER_FLAGS     - Custom toolchain flags [append only]: \"$(USER_FLAGS)\""
+	@echo "  USER_LIBS      - Custom libraries [append only]: \"$(USER_LIBS)\""
+	@echo "  EFFORT         - Optimization level: \"$(EFFORT)\""
+	@echo "  MARCH          - Machine architecture: \"$(MARCH)\""
+	@echo "  MABI           - Machine binary interface: \"$(MABI)\""
+	@echo "  APP_INC        - C include folder(s) [append only]: \"$(APP_INC)\""
+	@echo "  ASM_INC        - ASM include folder(s) [append only]: \"$(ASM_INC)\""
+	@echo "  RISCV_PREFIX   - Toolchain prefix: \"$(RISCV_PREFIX)\""
+	@echo "  NEORV32_HOME   - NEORV32 home folder: \"$(NEORV32_HOME)\""
+	@echo "  GDB_ARGS       - GDB (connection) arguments: \"$(GDB_ARGS)\""
+	@echo "  GHDL_RUN_FLAGS - GHDL simulation run arguments: \"$(GHDL_RUN_FLAGS)\""
 	@echo ""

@@ -25,7 +25,7 @@ entity neorv32_pwm is
     bus_req_i   : in  bus_req_t;  -- bus request
     bus_rsp_o   : out bus_rsp_t;  -- bus response
     clkgen_en_o : out std_ulogic; -- enable clock generator
-    clkgen_i    : in  std_ulogic_vector(07 downto 0); -- clock divider input
+    clkgen_i    : in  std_ulogic_vector(7 downto 0); -- clock divider input
     pwm_o       : out std_ulogic_vector(11 downto 0)  -- PWM output
   );
 end neorv32_pwm;
@@ -60,12 +60,10 @@ begin
   bus_access: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      bus_rsp_o.ack  <= '0';
-      bus_rsp_o.err  <= '0';
-      bus_rsp_o.data <= (others => '0');
-      enable         <= '0';
-      prsc           <= (others => '0');
-      pwm_ch         <= (others => (others => '0'));
+      bus_rsp_o <= rsp_terminate_c;
+      enable    <= '0';
+      prsc      <= (others => '0');
+      pwm_ch    <= (others => (others => '0'));
     elsif rising_edge(clk_i) then
       -- bus handshake --
       bus_rsp_o.ack  <= bus_req_i.stb;

@@ -2,7 +2,7 @@
 -- NEORV32 CPU - Physical Memory Protection Unit (RISC-V "Smpmp" Extension)         --
 -- -------------------------------------------------------------------------------- --
 -- Compatible to the RISC-V PMP privilege architecture specifications. Granularity  --
--- and supported modes can be constrained via generics to reduce area consumption.  --
+-- and supported modes can be constrained via generics to reduce area requirements. --
 -- -------------------------------------------------------------------------------- --
 -- The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              --
 -- Copyright (c) NEORV32 contributors.                                              --
@@ -21,7 +21,7 @@ use neorv32.neorv32_package.all;
 entity neorv32_cpu_pmp is
   generic (
     NUM_REGIONS : natural range 0 to 16; -- number of regions (0..16)
-    GRANULARITY : natural range 4 to natural'high; -- minimal region granularity in bytes, has to be a power of 2, min 4 bytes
+    GRANULARITY : natural; -- minimal region granularity in bytes, has to be a power of 2, min 4 bytes
     TOR_EN      : boolean; -- implement TOR mode
     NAP_EN      : boolean  -- implement NAPOT/NA4 modes
   );
@@ -76,7 +76,7 @@ architecture neorv32_cpu_pmp_rtl of neorv32_cpu_pmp is
   type csr_cfg_rd32_t is array (0 to 03) of std_ulogic_vector(XLEN-1 downto 0);
   type csr_addr_rd_t  is array (0 to 15) of std_ulogic_vector(XLEN-1 downto 0);
   type csr_t is record
-    we_cfg  : std_ulogic_vector(03 downto 0);
+    we_cfg  : std_ulogic_vector(3 downto 0);
     we_addr : std_ulogic_vector(15 downto 0);
     cfg     : csr_cfg_t;
     addr    : csr_addr_t;
@@ -141,12 +141,12 @@ begin
       elsif rising_edge(clk_i) then
 
         -- configuration --
-        if (csr.we_cfg(i/4) = '1') and (csr.cfg(i)(7) = '0') then -- unlocked write access
-          csr.cfg(i)(cfg_r_c) <= csr_wdata_i((i mod 4)*8+0); -- R (read)
-          csr.cfg(i)(cfg_w_c) <= csr_wdata_i((i mod 4)*8+1); -- W (write)
-          csr.cfg(i)(cfg_x_c) <= csr_wdata_i((i mod 4)*8+2); -- X (execute)
+        if (csr.we_cfg(i/4) = '1') and (csr.cfg(i)(cfg_l_c) = '0') then -- unlocked write access
+          csr.cfg(i)(cfg_r_c) <= csr_wdata_i((i mod 4)*8+cfg_r_c); -- R (read)
+          csr.cfg(i)(cfg_w_c) <= csr_wdata_i((i mod 4)*8+cfg_w_c); -- W (write)
+          csr.cfg(i)(cfg_x_c) <= csr_wdata_i((i mod 4)*8+cfg_x_c); -- X (execute)
           -- A (mode) --
-          mode_v := csr_wdata_i((i mod 4)*8+4 downto (i mod 4)*8+3);
+          mode_v := csr_wdata_i((i mod 4)*8+cfg_ah_c downto (i mod 4)*8+cfg_al_c);
           if ((mode_v = mode_tor_c)   and (not TOR_EN)) or -- TOR mode not implemented
              ((mode_v = mode_na4_c)   and (not NAP_EN)) or -- NA4 mode not implemented
              ((mode_v = mode_napot_c) and (not NAP_EN)) or -- NAPOT mode not implemented
@@ -158,7 +158,7 @@ begin
           --
           csr.cfg(i)(cfg_rl_c) <= '0'; -- reserved
           csr.cfg(i)(cfg_rh_c) <= '0'; -- reserved
-          csr.cfg(i)(cfg_l_c)  <= csr_wdata_i((i mod 4)*8+7); -- L (locked)
+          csr.cfg(i)(cfg_l_c)  <= csr_wdata_i((i mod 4)*8+cfg_l_c); -- L (locked)
         end if;
 
         -- address --
@@ -266,7 +266,7 @@ begin
         end if;
       end process addr_masking;
 
-    end generate;
+    end generate; -- /nap_mode_enable
 
 
     -- check region address match --

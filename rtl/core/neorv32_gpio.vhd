@@ -40,28 +40,22 @@ begin
   bus_access: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      bus_rsp_o.ack  <= '0';
-      bus_rsp_o.err  <= '0';
-      bus_rsp_o.data <= (others => '0');
-      dout           <= (others => '0');
+      bus_rsp_o <= rsp_terminate_c;
+      dout      <= (others => '0');
     elsif rising_edge(clk_i) then
       -- bus handshake --
       bus_rsp_o.ack  <= bus_req_i.stb;
       bus_rsp_o.err  <= '0';
       bus_rsp_o.data <= (others => '0');
       if (bus_req_i.stb = '1') then
-
-        -- write access --
-        if (bus_req_i.rw = '1') then
+        if (bus_req_i.rw = '1') then -- write access
           if (bus_req_i.addr(3 downto 2) = "10") then
             dout(31 downto 00) <= bus_req_i.data;
           end if;
           if (bus_req_i.addr(3 downto 2) = "11") then
             dout(63 downto 32) <= bus_req_i.data;
           end if;
-
-        -- read access --
-        else
+        else -- read access
           case bus_req_i.addr(3 downto 2) is
             when "00"   => bus_rsp_o.data <= din_rd(31 downto 00);
             when "01"   => bus_rsp_o.data <= din_rd(63 downto 32);
@@ -79,7 +73,6 @@ begin
   -- -------------------------------------------------------------------------------------------
   pin_mapping: process(din, dout)
   begin
-    -- defaults --
     din_rd  <= (others => '0');
     dout_rd <= (others => '0');
     for i in 0 to GPIO_NUM-1 loop
@@ -97,7 +90,7 @@ begin
     if (rstn_i = '0') then
       din <= (others => '0');
     elsif rising_edge(clk_i) then
-      din <= gpio_i; -- to prevent metastability
+      din <= gpio_i;
     end if;
   end process input_sync;
 

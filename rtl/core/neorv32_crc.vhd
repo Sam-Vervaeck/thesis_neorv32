@@ -34,12 +34,12 @@ architecture neorv32_crc_rtl of neorv32_crc is
 
   -- CRC core --
   type crc_t is record
-    mode : std_ulogic_vector(01 downto 0);
+    mode : std_ulogic_vector(1 downto 0);
     poly : std_ulogic_vector(31 downto 0);
-    data : std_ulogic_vector(07 downto 0);
+    data : std_ulogic_vector(7 downto 0);
     sreg : std_ulogic_vector(31 downto 0);
     --
-    cnt  : std_ulogic_vector(03 downto 0);
+    cnt  : std_ulogic_vector(3 downto 0);
     msb  : std_ulogic;
   end record;
   signal crc : crc_t;
@@ -54,13 +54,11 @@ begin
   bus_access: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      bus_rsp_o.ack  <= '0';
-      bus_rsp_o.err  <= '0';
-      bus_rsp_o.data <= (others => '0');
-      crc.mode <= (others => '0');
-      crc.poly <= (others => '0');
-      crc.data <= (others => '0');
-      we_ack   <= (others => '0');
+      bus_rsp_o <= rsp_terminate_c;
+      crc.mode  <= (others => '0');
+      crc.poly  <= (others => '0');
+      crc.data  <= (others => '0');
+      we_ack    <= (others => '0');
     elsif rising_edge(clk_i) then
       -- bus handshake --
       bus_rsp_o.data <= (others => '0');

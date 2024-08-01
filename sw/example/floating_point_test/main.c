@@ -1,36 +1,10 @@
-// #################################################################################################
-// # << NEORV32 - RISC-V Single-Precision Floating-Point 'Zfinx' Extension Verification Program >> #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2023, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 
 /**********************************************************************//**
@@ -104,7 +78,6 @@
 
 // Prototypes
 uint32_t get_test_vector(void);
-uint32_t xorshift32(void);
 uint32_t verify_result(uint32_t num, uint32_t opa, uint32_t opb, uint32_t ref, uint32_t res);
 void print_report(uint32_t num_err);
 
@@ -927,9 +900,9 @@ uint32_t get_test_vector(void) {
   float_conv_t tmp;
 
   // generate special value "every" ~256th time this function is called
-  if ((xorshift32() & 0xff) == 0xff) {
+  if ((neorv32_aux_xorshift32() & 0xff) == 0xff) {
 
-    switch((xorshift32() >> 10) & 0x3) { // random decision which special value we are taking
+    switch((neorv32_aux_xorshift32() >> 10) & 0x3) { // random decision which special value we are taking
       case  0: tmp.float_value  = +INFINITY; break;
       case  1: tmp.float_value  = -INFINITY; break;
       case  2: tmp.float_value  = +0.0f; break;
@@ -942,27 +915,10 @@ uint32_t get_test_vector(void) {
     }
   }
   else {
-    tmp.binary_value = xorshift32();
+    tmp.binary_value = neorv32_aux_xorshift32();
   }
 
   return tmp.binary_value;
-}
-
-
-/**********************************************************************//**
- * PSEUDO-RANDOM number generator.
- *
- * @return Random data (32-bit).
- **************************************************************************/
-uint32_t xorshift32(void) {
-
-  static uint32_t x32 = 314159265;
-
-  x32 ^= x32 << 13;
-  x32 ^= x32 >> 17;
-  x32 ^= x32 << 5;
-
-  return x32;
 }
 
 

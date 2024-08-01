@@ -1,36 +1,12 @@
-// #################################################################################################
-// # << NEORV32 - Executable image generator tool >>                                               #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2023, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// Executable memory image generator                                                //
+// -------------------------------------------------------------------------------- //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
 #include <stdint.h>
 #include <stdio.h>
@@ -41,7 +17,17 @@
 // executable signature ("magic word")
 const uint32_t signature = 0x4788CAFE;
 
-enum operation_enum {OP_APP_BIN, OP_APP_IMG, OP_BLD_IMG, OP_RAW_HEX, OP_RAW_BIN};
+// output file types (operation select)
+enum operation_enum {
+  OP_APP_BIN,
+  OP_APP_IMG,
+  OP_BLD_IMG,
+  OP_RAW_HEX,
+  OP_RAW_BIN,
+  OP_RAW_COE,
+  OP_RAW_MEM,
+  OP_RAW_MIF
+};
 
 int main(int argc, char *argv[]) {
 
@@ -51,9 +37,12 @@ int main(int argc, char *argv[]) {
            "1st: Operation\n"
            " -app_bin : Generate application executable binary (binary file, little-endian, with header) \n"
            " -app_img : Generate application raw executable memory image (vhdl package body file, no header)\n"
+           " -bld_img : Generate bootloader raw executable memory image (vhdl package body file, no header)\n"
            " -raw_hex : Generate application raw executable (ASCII hex file, no header)\n"
            " -raw_bin : Generate application raw executable (binary file, no header)\n"
-           " -bld_img : Generate bootloader raw executable memory image (vhdl package body file, no header)\n"
+           " -raw_coe : Generate application raw executable (COE file, no header)\n"
+           " -raw_mem : Generate application raw executable (MEM file, no header)\n"
+           " -raw_mif : Generate application raw executable (MIF file, no header)\n"
            "2nd: Input file (raw binary image)\n"
            "3rd: Output file\n"
            "4th: Project name or folder (optional)\n");
@@ -73,6 +62,9 @@ int main(int argc, char *argv[]) {
   else if (strcmp(argv[1], "-bld_img") == 0) { operation = OP_BLD_IMG; }
   else if (strcmp(argv[1], "-raw_hex") == 0) { operation = OP_RAW_HEX; }
   else if (strcmp(argv[1], "-raw_bin") == 0) { operation = OP_RAW_BIN; }
+  else if (strcmp(argv[1], "-raw_coe") == 0) { operation = OP_RAW_COE; }
+  else if (strcmp(argv[1], "-raw_mem") == 0) { operation = OP_RAW_MEM; }
+  else if (strcmp(argv[1], "-raw_mif") == 0) { operation = OP_RAW_MIF; }
   else {
     printf("Invalid operation!");
     return -1;
@@ -107,8 +99,7 @@ int main(int argc, char *argv[]) {
   }
 
   // --------------------------------------------------------------------------
-  // Try to find out targeted CPU configuration
-  // via MARCH environment variable
+  // Try to find out targeted CPU configuration via MARCH environment variable
   // --------------------------------------------------------------------------
   char string_march[64] = "default";
   char *envvar_march = "MARCH";
@@ -127,7 +118,7 @@ int main(int argc, char *argv[]) {
   struct tm *time_local = localtime(&time_current);
   char compile_time[64];
 
-  snprintf(compile_time, 64, "%02d.%02d.%d %02d:%02d:%02d",
+  snprintf(compile_time, 64, "%02d.%02d.%d %02d:%02d:%02d (dd.mm.yyyy hh:mm:ss)",
     time_local->tm_mday,
     time_local->tm_mon + 1,
     time_local->tm_year + 1900,
@@ -150,7 +141,7 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
-  // Generate BINARY executable (with header!) for bootloader upload
+  // Generate BINARY executable for bootloader upload (with header)
   // --------------------------------------------------------------------------
   if (operation == OP_APP_BIN) {
 
@@ -209,10 +200,10 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
-  // Generate APPLICATION's executable memory initialization file (no header!)
-  // => VHDL package body
+  // Generate RAW APPLICATION's executable memory initialization file
+  // -> VHDL package body
   // --------------------------------------------------------------------------
-  if (operation == OP_APP_IMG) {
+  else if (operation == OP_APP_IMG) {
 
     // header
     sprintf(tmp_string, "-- The NEORV32 RISC-V Processor: https://github.com/stnolting/neorv32\n"
@@ -266,10 +257,10 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
-  // Generate BOOTLOADER's executable memory initialization file (no header!)
-  // => VHDL package body
+  // Generate RAW BOOTLOADER's executable memory initialization file
+  // -> VHDL package body
   // --------------------------------------------------------------------------
-  if (operation == OP_BLD_IMG) {
+  else if (operation == OP_BLD_IMG) {
 
     // header
     sprintf(tmp_string, "-- The NEORV32 RISC-V Processor: https://github.com/stnolting/neorv32\n"
@@ -323,9 +314,9 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
-  // Generate raw APPLICATION's executable ASCII hex file (no header!)
+  // Generate RAW APPLICATION's executable ASCII hex file
   // --------------------------------------------------------------------------
-  if (operation == OP_RAW_HEX) {
+  else if (operation == OP_RAW_HEX) {
 
     while(fread(&buffer, sizeof(unsigned char), 4, input) != 0) {
       tmp  = (uint32_t)(buffer[0] << 0);
@@ -339,9 +330,9 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
-  // Generate raw APPLICATION's executable binary file (no header!)
+  // Generate RAW APPLICATION's executable binary file
   // --------------------------------------------------------------------------
-  if (operation == OP_RAW_BIN) {
+  else if (operation == OP_RAW_BIN) {
 
     while(fread(&buffer, sizeof(unsigned char), 1, input) != 0) {
       fputc(buffer[0], output);
@@ -350,9 +341,106 @@ int main(int argc, char *argv[]) {
 
 
   // --------------------------------------------------------------------------
+  // Generate RAW APPLICATION's executable COE file
+  // --------------------------------------------------------------------------
+  else if (operation == OP_RAW_COE) {
+
+    // header
+    sprintf(tmp_string, "memory_initialization_radix=16;\n");
+    fputs(tmp_string, output);
+    sprintf(tmp_string, "memory_initialization_vector=");
+    fputs(tmp_string, output);
+
+    i = 0;
+    while(fread(&buffer, sizeof(unsigned char), 4, input) != 0) {
+      tmp  = (uint32_t)(buffer[0] << 0);
+      tmp |= (uint32_t)(buffer[1] << 8);
+      tmp |= (uint32_t)(buffer[2] << 16);
+      tmp |= (uint32_t)(buffer[3] << 24);
+      if (i == (input_words-1)) {
+        sprintf(tmp_string, "\n%08x", (unsigned int)tmp);
+      }
+      else {
+        sprintf(tmp_string, "\n%08x,", (unsigned int)tmp);
+      }
+      fputs(tmp_string, output);
+      i++;
+    }
+
+    // footer
+    sprintf(tmp_string, ";\n");
+    fputs(tmp_string, output);
+  }
+
+
+  // --------------------------------------------------------------------------
+  // Generate RAW APPLICATION's executable MEM file
+  // --------------------------------------------------------------------------
+  else if (operation == OP_RAW_MEM) {
+
+    i = 0;
+    while(fread(&buffer, sizeof(unsigned char), 4, input) != 0) {
+      tmp  = (uint32_t)(buffer[0] << 0);
+      tmp |= (uint32_t)(buffer[1] << 8);
+      tmp |= (uint32_t)(buffer[2] << 16);
+      tmp |= (uint32_t)(buffer[3] << 24);
+      sprintf(tmp_string, "@%08x %08x\n", (unsigned int)i, (unsigned int)tmp);
+      fputs(tmp_string, output);
+      i++;
+    }
+  }
+
+
+  // --------------------------------------------------------------------------
+  // Generate RAW APPLICATION's executable MIF file
+  // --------------------------------------------------------------------------
+  else if (operation == OP_RAW_MIF) {
+
+    // header
+    sprintf(tmp_string, "DEPTH = %lu;\n", raw_exe_size/4); // memory depth in words
+    fputs(tmp_string, output);
+    sprintf(tmp_string, "WIDTH = 32;\n"); // bits per data word
+    fputs(tmp_string, output);
+    sprintf(tmp_string, "ADDRESS_RADIX = HEX;\n"); // hexadecimal address format
+    fputs(tmp_string, output);
+    sprintf(tmp_string, "DATA_RADIX = HEX;\n"); // hexadecimal data format
+    fputs(tmp_string, output);
+
+    sprintf(tmp_string, "CONTENT\n");
+    fputs(tmp_string, output);
+    sprintf(tmp_string, "BEGIN\n");
+    fputs(tmp_string, output);
+    i = 0;
+    while(fread(&buffer, sizeof(unsigned char), 4, input) != 0) {
+      tmp  = (uint32_t)(buffer[0] << 0);
+      tmp |= (uint32_t)(buffer[1] << 8);
+      tmp |= (uint32_t)(buffer[2] << 16);
+      tmp |= (uint32_t)(buffer[3] << 24);
+      sprintf(tmp_string, "%08x : %08x;\n", (unsigned int)i, (unsigned int)tmp);
+      fputs(tmp_string, output);
+      i++;
+    }
+
+    // footer
+    sprintf(tmp_string, "END;\n");
+    fputs(tmp_string, output);
+  }
+
+
+  // --------------------------------------------------------------------------
+  // Invalid operation
+  // --------------------------------------------------------------------------
+  else {
+    printf("Invalid operation!");
+    fclose(input);
+    fclose(output);
+    return -1;
+  }
+
+
+  // --------------------------------------------------------------------------
   // Done, clean up
   // --------------------------------------------------------------------------
-
   fclose(input);
   fclose(output);
 

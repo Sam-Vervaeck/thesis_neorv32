@@ -1,5 +1,5 @@
 -- ================================================================================ --
--- NEORV32 SoC - System/Processor Configuration Information Memory (SYSINFO)        --
+-- NEORV32 SoC - System Configuration Information Memory (SYSINFO)                  --
 -- -------------------------------------------------------------------------------- --
 -- The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              --
 -- Copyright (c) NEORV32 contributors.                                              --
@@ -24,7 +24,6 @@ entity neorv32_sysinfo is
     MEM_INT_IMEM_SIZE     : natural; -- size of processor-internal instruction memory in bytes
     MEM_INT_DMEM_EN       : boolean; -- implement processor-internal data memory
     MEM_INT_DMEM_SIZE     : natural; -- size of processor-internal data memory in bytes
-    AMO_RVS_GRANULARITY   : natural; -- size in bytes, has to be a power of 2, min 4
     ICACHE_EN             : boolean; -- implement instruction cache
     ICACHE_NUM_BLOCKS     : natural; -- i-cache: number of blocks (min 2), has to be a power of 2
     ICACHE_BLOCK_SIZE     : natural; -- i-cache: block size in bytes (min 4), has to be a power of 2
@@ -75,38 +74,51 @@ architecture neorv32_sysinfo_rtl of neorv32_sysinfo is
   constant xcache_en_c    : boolean := XBUS_EN and XBUS_CACHE_EN;
   constant xip_cache_en_c : boolean := XIP_EN and XIP_CACHE_EN;
 
-  -- system information ROM --
+  -- system information memory --
   type sysinfo_t is array (0 to 3) of std_ulogic_vector(31 downto 0);
   signal sysinfo : sysinfo_t;
 
+  -- bus access buffer --
+  signal buf_adr : std_ulogic_vector(1 downto 0);
+  signal buf_ack : std_ulogic;
+
 begin
 
-  -- Construct Info ROM ---------------------------------------------------------------------
+  -- Construct Info Memory ------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
   -- SYSINFO(0): Processor Clock Frequency in Hz --
-  sysinfo(0) <= std_ulogic_vector(to_unsigned(CLOCK_FREQUENCY, 32));
+  sysinfo_0_write: process(rstn_i, clk_i)
+  begin
+    if (rstn_i = '0') then
+      sysinfo(0) <= std_ulogic_vector(to_unsigned(CLOCK_FREQUENCY, 32)); -- initialize from generic
+    elsif rising_edge(clk_i) then
+      if (bus_req_i.stb = '1') and (bus_req_i.rw = '1') and (bus_req_i.addr(3 downto 2) = "00") then
+        sysinfo(0) <= bus_req_i.data;
+      end if;
+    end if;
+  end process sysinfo_0_write;
 
   -- SYSINFO(1): Internal Memory Configuration (sizes)
-  sysinfo(1)(07 downto 00) <= std_ulogic_vector(to_unsigned(index_size_f(MEM_INT_IMEM_SIZE), 8)); -- log2(IMEM size)
-  sysinfo(1)(15 downto 08) <= std_ulogic_vector(to_unsigned(index_size_f(MEM_INT_DMEM_SIZE), 8)); -- log2(DMEM size)
+  sysinfo(1)(7  downto 0)  <= std_ulogic_vector(to_unsigned(index_size_f(MEM_INT_IMEM_SIZE), 8)); -- log2(IMEM size)
+  sysinfo(1)(15 downto 8)  <= std_ulogic_vector(to_unsigned(index_size_f(MEM_INT_DMEM_SIZE), 8)); -- log2(DMEM size)
   sysinfo(1)(23 downto 16) <= (others => '0'); -- reserved
-  sysinfo(1)(31 downto 24) <= std_ulogic_vector(to_unsigned(index_size_f(AMO_RVS_GRANULARITY), 8)); -- log2(reservation set granularity)
+  sysinfo(1)(31 downto 24) <= (others => '0'); -- reserved
 
   -- SYSINFO(2): SoC Configuration --
-  sysinfo(2)(00) <= '1' when INT_BOOTLOADER_EN   else '0'; -- processor-internal bootloader implemented?
-  sysinfo(2)(01) <= '1' when XBUS_EN             else '0'; -- external bus interface implemented?
-  sysinfo(2)(02) <= '1' when int_imem_en_c       else '0'; -- processor-internal instruction memory implemented?
-  sysinfo(2)(03) <= '1' when int_dmem_en_c       else '0'; -- processor-internal data memory implemented?
-  sysinfo(2)(04) <= '1' when ON_CHIP_DEBUGGER_EN else '0'; -- on-chip debugger implemented?
-  sysinfo(2)(05) <= '1' when ICACHE_EN           else '0'; -- processor-internal instruction cache implemented?
-  sysinfo(2)(06) <= '1' when DCACHE_EN           else '0'; -- processor-internal data cache implemented?
-  sysinfo(2)(07) <= '1' when CLOCK_GATING_EN     else '0'; -- enable clock gating when in sleep mode
-  sysinfo(2)(08) <= '1' when xcache_en_c         else '0'; -- external bus interface cache implemented?
-  sysinfo(2)(09) <= '1' when XIP_EN              else '0'; -- execute in place module implemented?
-  sysinfo(2)(10) <= '1' when xip_cache_en_c      else '0'; -- execute in place cache implemented?
-  sysinfo(2)(11) <= '0'; -- reserved
-  sysinfo(2)(12) <= '0'; -- reserved
-  sysinfo(2)(13) <= '0'; -- reserved
+  sysinfo(2)(0)  <= '1' when INT_BOOTLOADER_EN   else '0'; -- processor-internal bootloader implemented?
+  sysinfo(2)(1)  <= '1' when XBUS_EN             else '0'; -- external bus interface implemented?
+  sysinfo(2)(2)  <= '1' when int_imem_en_c       else '0'; -- processor-internal instruction memory implemented?
+  sysinfo(2)(3)  <= '1' when int_dmem_en_c       else '0'; -- processor-internal data memory implemented?
+  sysinfo(2)(4)  <= '1' when ON_CHIP_DEBUGGER_EN else '0'; -- on-chip debugger implemented?
+  sysinfo(2)(5)  <= '1' when ICACHE_EN           else '0'; -- processor-internal instruction cache implemented?
+  sysinfo(2)(6)  <= '1' when DCACHE_EN           else '0'; -- processor-internal data cache implemented?
+  sysinfo(2)(7)  <= '1' when CLOCK_GATING_EN     else '0'; -- enable clock gating when in sleep mode
+  sysinfo(2)(8)  <= '1' when xcache_en_c         else '0'; -- external bus interface cache implemented?
+  sysinfo(2)(9)  <= '1' when XIP_EN              else '0'; -- execute in-place module implemented?
+  sysinfo(2)(10) <= '1' when xip_cache_en_c      else '0'; -- execute in-place cache implemented?
+  sysinfo(2)(11) <= '0';                                   -- reserved
+  sysinfo(2)(12) <= '0';                                   -- reserved
+  sysinfo(2)(13) <= '0';                                   -- reserved
   sysinfo(2)(14) <= '1' when IO_DMA_EN           else '0'; -- direct memory access controller (DMA) implemented?
   sysinfo(2)(15) <= '1' when IO_GPIO_EN          else '0'; -- general purpose input/output port unit (GPIO) implemented?
   sysinfo(2)(16) <= '1' when IO_MTIME_EN         else '0'; -- machine system timer (MTIME) implemented?
@@ -127,10 +139,10 @@ begin
   sysinfo(2)(31) <= '1' when IO_CRC_EN           else '0'; -- cyclic redundancy check unit (CRC) implemented?
 
   -- SYSINFO(3): Cache Configuration --
-  sysinfo(3)(03 downto 00) <= std_ulogic_vector(to_unsigned(index_size_f(ICACHE_BLOCK_SIZE), 4)) when ICACHE_EN else (others => '0'); -- i-cache: log2(block_size_in_bytes)
-  sysinfo(3)(07 downto 04) <= std_ulogic_vector(to_unsigned(index_size_f(ICACHE_NUM_BLOCKS), 4)) when ICACHE_EN else (others => '0'); -- i-cache: log2(number_of_block)
+  sysinfo(3)(3 downto 0)   <= std_ulogic_vector(to_unsigned(index_size_f(ICACHE_BLOCK_SIZE), 4)) when ICACHE_EN else (others => '0'); -- i-cache: log2(block_size_in_bytes)
+  sysinfo(3)(7 downto 4)   <= std_ulogic_vector(to_unsigned(index_size_f(ICACHE_NUM_BLOCKS), 4)) when ICACHE_EN else (others => '0'); -- i-cache: log2(number_of_block)
   --
-  sysinfo(3)(11 downto 08) <= std_ulogic_vector(to_unsigned(index_size_f(DCACHE_BLOCK_SIZE), 4)) when DCACHE_EN else (others => '0'); -- d-cache: log2(block_size)
+  sysinfo(3)(11 downto 8)  <= std_ulogic_vector(to_unsigned(index_size_f(DCACHE_BLOCK_SIZE), 4)) when DCACHE_EN else (others => '0'); -- d-cache: log2(block_size)
   sysinfo(3)(15 downto 12) <= std_ulogic_vector(to_unsigned(index_size_f(DCACHE_NUM_BLOCKS), 4)) when DCACHE_EN else (others => '0'); -- d-cache: log2(num_blocks)
   --
   sysinfo(3)(19 downto 16) <= std_ulogic_vector(to_unsigned(index_size_f(XIP_CACHE_BLOCK_SIZE), 4)) when xip_cache_en_c else (others => '0'); -- xip-cache: log2(block_size_in_bytes)
@@ -142,22 +154,23 @@ begin
 
   -- Bus Access -----------------------------------------------------------------------------
   -- -------------------------------------------------------------------------------------------
-  bus_access: process(rstn_i, clk_i)
+  access_buffer: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      bus_rsp_o.ack  <= '0';
-      bus_rsp_o.err  <= '0';
-      bus_rsp_o.data <= (others => '0');
+      buf_ack <= '0';
+      buf_adr <= (others => '0');
     elsif rising_edge(clk_i) then
-      bus_rsp_o.ack  <= '0';
-      bus_rsp_o.err  <= '0';
-      bus_rsp_o.data <= (others => '0');
-      if (bus_req_i.stb = '1') and (bus_req_i.rw = '0') then -- read-only
-        bus_rsp_o.ack  <= '1';
-        bus_rsp_o.data <= sysinfo(to_integer(unsigned(bus_req_i.addr(3 downto 2))));
+      buf_ack <= bus_req_i.stb;
+      if (bus_req_i.stb = '1') then
+        buf_adr <= bus_req_i.addr(3 downto 2);
       end if;
     end if;
-  end process bus_access;
+  end process access_buffer;
+
+  -- output gate and SYSINFO lookup --
+  bus_rsp_o.data <= sysinfo(to_integer(unsigned(buf_adr))) when (buf_ack = '1') else (others => '0');
+  bus_rsp_o.ack  <= buf_ack;
+  bus_rsp_o.err  <= '0'; -- no bus errors
 
 
 end neorv32_sysinfo_rtl;

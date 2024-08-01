@@ -4,13 +4,13 @@
   <vendor>stnolting</vendor>
   <name>neorv32</name>
   <series>RISC-V</series>
-  <version>1.9.9</version>
+  <version>1.10.2</version>
   <description>The NEORV32 RISC-V Processor</description>
 
   <!-- CPU core -->
   <cpu>
-    <name>NEORV32</name>
-    <revision>r2p0</revision>
+    <name>other</name>
+    <revision>r1p0</revision>
     <endian>little</endian>
     <mpuPresent>true</mpuPresent>
     <fpuPresent>true</fpuPresent>
@@ -18,8 +18,9 @@
     <dspPresent>false</dspPresent>
     <icachePresent>true</icachePresent>
     <dcachePresent>true</dcachePresent>
+    <itcmPresent>true</itcmPresent>
+    <dtcmPresent>true</dtcmPresent>
     <nvicPrioBits>4</nvicPrioBits>
-    <vendorSystickConfig>false</vendorSystickConfig>
   </cpu>
 
   <!-- defaults for all peripherals -->
@@ -38,7 +39,6 @@
     <peripheral>
       <name>CFS</name>
       <description>Custom functions subsystem</description>
-      <groupName>CFS</groupName>
       <baseAddress>0xFFFFEB00</baseAddress>
 
       <interrupt><name>CFS_FIRQ</name><value>1</value></interrupt>
@@ -122,7 +122,6 @@
     <peripheral>
       <name>SDI</name>
       <description>Serial data interface controller</description>
-      <groupName>SDI</groupName>
       <baseAddress>0xFFFFF700</baseAddress>
 
       <interrupt><name>SDI_FIRQ</name><value>11</value></interrupt>
@@ -143,11 +142,6 @@
               <name>SDI_CTRL_EN</name>
               <bitRange>[0:0]</bitRange>
               <description>SDI enable flag</description>
-            </field>
-            <field>
-              <name>SDI_CTRL_CLR_RX</name>
-              <bitRange>[1:1]</bitRange>
-              <description>Clear RX FIFO, bit auto-clears</description>
             </field>
             <field>
               <name>SDI_CTRL_FIFO</name>
@@ -215,6 +209,12 @@
               <access>read-only</access>
               <description>TX FIFO full</description>
             </field>
+            <field>
+              <name>SDI_CTRL_CS_ACTIVE</name>
+              <bitRange>[31:31]</bitRange>
+              <access>read-only</access>
+              <description>Chip-select line is active when set</description>
+            </field>
           </fields>
         </register>
         <register>
@@ -230,7 +230,6 @@
     <peripheral>
       <name>SLINK</name>
       <description>Stream Link Interface</description>
-      <groupName>SLINK</groupName>
       <baseAddress>0xFFFFEC00</baseAddress>
 
       <interrupt><name>SLINK_RX_FIRQ</name><value>14</value></interrupt>
@@ -349,6 +348,24 @@
           </fields>
         </register>
         <register>
+          <name>ROUTE</name>
+          <description>Routing information</description>
+          <addressOffset>0x04</addressOffset>
+          <fields>
+            <field>
+              <name>SLINK_ROUTE_DST</name>
+              <bitRange>[3:0]</bitRange>
+              <description>TX stream destination address/ID (TDEST)</description>
+            </field>
+            <field>
+              <name>SLINK_ROUTE_SRC</name>
+              <bitRange>[7:4]</bitRange>
+              <access>read-only</access>
+              <description>RX stream source address/ID (TID)</description>
+            </field>
+          </fields>
+        </register>
+        <register>
           <name>DATA</name>
           <description>RX/TX data register</description>
           <addressOffset>0x08</addressOffset>
@@ -366,7 +383,6 @@
     <peripheral>
       <name>DMA</name>
       <description>Direct memory access controller</description>
-      <groupName>DMA</groupName>
       <baseAddress>0xFFFFED00</baseAddress>
 
       <interrupt><name>DMA_FIRQ</name><value>10</value></interrupt>
@@ -420,6 +436,11 @@
               <name>DMA_CTRL_DONE</name>
               <bitRange>[11:11]</bitRange>
               <description>DMA transfer done; auto-clears on write access</description>
+            </field>
+            <field>
+              <name>DMA_CTRL_FIRQ_TYPE</name>
+              <bitRange>[15:15]</bitRange>
+              <description>Trigger on rising-edge (0) or high-level (1) or selected FIRQ channel</description>
             </field>
             <field>
               <name>DMA_CTRL_FIRQ_SEL</name>
@@ -478,7 +499,6 @@
     <peripheral>
       <name>CRC</name>
       <description>Cyclic redundancy check unit</description>
-      <groupName>CRC</groupName>
       <baseAddress>0xFFFFEE00</baseAddress>
 
       <addressBlock>
@@ -516,7 +536,6 @@
     <peripheral>
       <name>PWM</name>
       <description>Pulse-width modulation controller</description>
-      <groupName>PWM</groupName>
       <baseAddress>0xFFFFF000</baseAddress>
 
       <addressBlock>
@@ -566,7 +585,6 @@
     <peripheral>
       <name>XIP</name>
       <description>Execute In Place Module</description>
-      <groupName>CIP</groupName>
       <baseAddress>0xFFFFEF00</baseAddress>
 
       <addressBlock>
@@ -668,7 +686,6 @@
     <peripheral>
       <name>GPTMR</name>
       <description>General purpose timer</description>
-      <groupName>GPTMR</groupName>
       <baseAddress>0xFFFFF100</baseAddress>
 
       <interrupt><name>GPTMR_FIRQ</name><value>12</value></interrupt>
@@ -696,39 +713,20 @@
               <description>Clock prescaler select</description>
             </field>
             <field>
-              <name>GPTMR_CTRL_IRQM</name>
+              <name>GPTMR_CTRL_MODE</name>
               <bitRange>[4:4]</bitRange>
-              <description>Enable interrupt on timer match</description>
+              <description>Operation mode (0=single-shot, 1=continuous)</description>
             </field>
             <field>
-              <name>GPTMR_CTRL_IRQC</name>
-              <bitRange>[5:5]</bitRange>
-              <description>Enable interrupt on capture trigger</description>
-            </field>
-            <field>
-              <name>GPTMR_CTRL_RISE</name>
-              <bitRange>[6:6]</bitRange>
-              <description>Capture on rising edge; capture-mode only</description>
-            </field>
-            <field>
-              <name>GPTMR_CTRL_FALL</name>
-              <bitRange>[7:7]</bitRange>
-              <description>Capture on falling edge; capture-mode only</description>
-            </field>
-            <field>
-              <name>GPTMR_CTRL_FILTER</name>
-              <bitRange>[8:8]</bitRange>
-              <description>Filter capture input; capture-mode only</description>
-            </field>
-            <field>
-              <name>GPTMR_CTRL_TRIGM</name>
+              <name>GPTMR_CTRL_IRQ_CLR</name>
               <bitRange>[30:30]</bitRange>
-              <description>Timer-match has fired, cleared by writing 0</description>
+              <description>Set to clear timer-match interrupt</description>
             </field>
             <field>
-              <name>GPTMR_CTRL_TRIGC</name>
+              <name>GPTMR_CTRL_IRQ_PND</name>
               <bitRange>[31:31]</bitRange>
-              <description>Capture-trigger has fired, cleared by writing</description>
+              <access>read-only</access>
+              <description>Timer-match interrupt pending</description>
             </field>
           </fields>
         </register>
@@ -741,11 +739,6 @@
           <name>COUNT</name>
           <description>Counter register</description>
           <addressOffset>0x08</addressOffset>
-        </register>
-        <register>
-          <name>CAPTURE</name>
-          <description>Capture register</description>
-          <addressOffset>0x0C</addressOffset>
           <access>read-only</access>
         </register>
       </registers>
@@ -756,7 +749,6 @@
     <peripheral>
       <name>ONEWIRE</name>
       <description>1-Wire Interface Controller</description>
-      <groupName>ONEWIRE</groupName>
       <baseAddress>0xFFFFF200</baseAddress>
 
       <interrupt><name>ONEWIRE_FIRQ</name><value>13</value></interrupt>
@@ -843,14 +835,13 @@
     <peripheral>
       <name>XIRQ</name>
       <description>External interrupts controller</description>
-      <groupName>XIRQ</groupName>
       <baseAddress>0xFFFFF300</baseAddress>
 
       <interrupt><name>XIRQ_FIRQ</name><value>8</value></interrupt>
 
       <addressBlock>
         <offset>0</offset>
-        <size>0x10</size>
+        <size>0x14</size>
         <usage>registers</usage>
       </addressBlock>
 
@@ -870,6 +861,16 @@
           <description>IRQ source register</description>
           <addressOffset>0x08</addressOffset>
         </register>
+        <register>
+          <name>TTYP</name>
+          <description>IRQ trigger type (level/edge)</description>
+          <addressOffset>0x0c</addressOffset>
+        </register>
+        <register>
+          <name>TPOL</name>
+          <description>IRQ trigger polarity (high/low, rising/falling)</description>
+          <addressOffset>0x10</addressOffset>
+        </register>
       </registers>
     </peripheral>
 
@@ -878,7 +879,6 @@
     <peripheral>
       <name>MTIME</name>
       <description>Machine timer</description>
-      <groupName>MTIME</groupName>
       <baseAddress>0xFFFFF400</baseAddress>
 
       <addressBlock>
@@ -916,7 +916,6 @@
     <peripheral>
       <name>UART0</name>
       <description>Primary universal asynchronous receiver and transmitter</description>
-      <groupName>UART0</groupName>
       <baseAddress>0xFFFFF500</baseAddress>
 
       <interrupt><name>UART0_RX_FIRQ</name><value>2</value></interrupt>
@@ -1021,6 +1020,16 @@
               <description>Fire IRQ if TX FIFO not at least half-full</description>
             </field>
             <field>
+              <name>UART_CTRL_RX_CLR</name>
+              <bitRange>[28:28]</bitRange>
+              <description>Clear RX FIFO, flag auto-clears</description>
+            </field>
+            <field>
+              <name>UART_CTRL_TX_CLR</name>
+              <bitRange>[29:29]</bitRange>
+              <description>Clear TX FIFO, flag auto-clears</description>
+            </field>
+            <field>
               <name>UART_CTRL_RX_OVER</name>
               <bitRange>[30:30]</bitRange>
               <access>read-only</access>
@@ -1047,7 +1056,6 @@
     <peripheral derivedFrom="UART0">
       <name>UART1</name>
       <description>Secondary universal asynchronous receiver and transmitter</description>
-      <groupName>UART1</groupName>
       <baseAddress>0xFFFFF600</baseAddress>
 
       <interrupt><name>UART1_RX_FIRQ</name><value>4</value></interrupt>
@@ -1065,7 +1073,6 @@
     <peripheral>
       <name>SPI</name>
       <description>Serial peripheral interface controller</description>
-      <groupName>SPI</groupName>
       <baseAddress>0xFFFFF800</baseAddress>
 
       <interrupt><name>SPI_FIRQ</name><value>6</value></interrupt>
@@ -1098,28 +1105,18 @@
               <description>Clock polarity</description>
             </field>
             <field>
-              <name>SPI_CTRL_CS_SEL</name>
-              <bitRange>[5:3]</bitRange>
-              <description>CS select</description>
-            </field>
-            <field>
-              <name>SPI_CTRL_CS_EN</name>
-              <bitRange>[6:6]</bitRange>
-              <description>Enable selected CS line</description>
-            </field>
-            <field>
               <name>SPI_CTRL_PRSC</name>
-              <bitRange>[9:7]</bitRange>
+              <bitRange>[5:3]</bitRange>
               <description>Clock prescaler select</description>
             </field>
             <field>
               <name>SPI_CTRL_CDIV</name>
-              <bitRange>[13:10]</bitRange>
+              <bitRange>[9:6]</bitRange>
               <description>SPI clock divider</description>
             </field>
             <field>
               <name>SPI_CTRL_HIGHSPEED</name>
-              <bitRange>[14:14]</bitRange>
+              <bitRange>[10:10]</bitRange>
               <description>SPI high-speed mode</description>
             </field>
             <field>
@@ -1173,10 +1170,16 @@
               <description>log2(FIFO size)</description>
             </field>
             <field>
+              <name>SPI_CS_ACTIVE</name>
+              <bitRange>[30:30]</bitRange>
+              <access>read-only</access>
+              <description>Set if any chip-select line is active</description>
+            </field>
+            <field>
               <name>SPI_CTRL_BUSY</name>
               <bitRange>[31:31]</bitRange>
               <access>read-only</access>
-              <description>SPI busy flag</description>
+              <description>SPI busy flag (transmission in progress and TX FIFO not empty yet)</description>
             </field>
           </fields>
         </register>
@@ -1184,6 +1187,18 @@
           <name>DATA</name>
           <description>Data register</description>
           <addressOffset>0x04</addressOffset>
+          <fields>
+            <field>
+              <name>SPI_DATA</name>
+              <bitRange>[7:0]</bitRange>
+              <description>RX/TX data (via FIFOs)</description>
+            </field>
+            <field>
+              <name>SPI_DATA_CMD</name>
+              <bitRange>[31:31]</bitRange>
+              <description>SPI TX data (0) / command (1) select</description>
+            </field>
+          </fields>
         </register>
       </registers>
     </peripheral>
@@ -1193,7 +1208,6 @@
     <peripheral>
       <name>TWI</name>
       <description>Two-wire interface controller</description>
-      <groupName>SPI</groupName>
       <baseAddress>0xFFFFF900</baseAddress>
 
       <interrupt><name>TWI_FIRQ</name><value>7</value></interrupt>
@@ -1286,7 +1300,6 @@
     <peripheral>
       <name>TRNG</name>
       <description>True random number generator</description>
-      <groupName>TRNG</groupName>
       <baseAddress>0xFFFFFA00</baseAddress>
 
       <addressBlock>
@@ -1312,6 +1325,11 @@
               <bitRange>[19:16]</bitRange>
               <access>read-only</access>
               <description>Log2(FIFO size)</description>
+            </field>
+            <field>
+              <name>TRNG_CTRL_IRQ_SEL</name>
+              <bitRange>[27:27]</bitRange>
+              <description>Interrupt trigger select (0 = data available, 1 = FIFO full)</description>
             </field>
             <field>
               <name>TRNG_CTRL_FIFO_CLR</name>
@@ -1345,7 +1363,6 @@
     <peripheral>
       <name>WDT</name>
       <description>Watchdog timer</description>
-      <groupName>WDT</groupName>
       <baseAddress>0xFFFFFB00</baseAddress>
 
       <addressBlock>
@@ -1419,7 +1436,6 @@
     <peripheral>
       <name>GPIO</name>
       <description>General purpose input/output port</description>
-      <groupName>GPIO</groupName>
       <baseAddress>0xFFFFFC00</baseAddress>
 
       <addressBlock>
@@ -1430,24 +1446,24 @@
 
       <registers>
         <register>
-          <name>INPUT_LO</name>
+          <name>INPUT[0]</name>
           <description>Parallel input register - low</description>
           <addressOffset>0x00</addressOffset>
           <access>read-only</access>
         </register>
         <register>
-          <name>INPUT_HI</name>
+          <name>INPUT[1]</name>
           <description>Parallel input register - high</description>
           <addressOffset>0x04</addressOffset>
           <access>read-only</access>
         </register>
         <register>
-          <name>OUTPUT_LO</name>
+          <name>OUTPUT[0]</name>
           <description>Parallel output register - low</description>
           <addressOffset>0x08</addressOffset>
         </register>
         <register>
-          <name>OUTPUT_HI</name>
+          <name>OUTPUT[1]</name>
           <description>Parallel output register - high</description>
           <addressOffset>0x0C</addressOffset>
         </register>
@@ -1459,7 +1475,6 @@
     <peripheral>
       <name>NEOLED</name>
       <description>Smart LED hardware interface</description>
-      <groupName>NEOLED</groupName>
       <baseAddress>0xFFFFFD00</baseAddress>
 
       <interrupt><name>NEOLED_FIRQ</name><value>9</value></interrupt>
@@ -1561,7 +1576,6 @@
     <peripheral>
       <name>SYSINFO</name>
       <description>System configuration information memory</description>
-      <groupName>SYSINFO</groupName>
       <baseAddress>0xFFFFFE00</baseAddress>
 
       <addressBlock>
@@ -1573,9 +1587,8 @@
       <registers>
         <register>
           <name>CLK</name>
-          <description>Clock speed in Hz</description>
+          <description>Processor clock speed in Hz</description>
           <addressOffset>0x00</addressOffset>
-          <access>read-only</access>
         </register>
         <register>
           <name>MEM</name>
@@ -1585,8 +1598,8 @@
           <fields>
             <field><name>SYSINFO_MEM_0</name><bitRange>[7:0]</bitRange><description>log2(IMEM size in bytes)</description></field>
             <field><name>SYSINFO_MEM_1</name><bitRange>[15:8]</bitRange><description>log2(DMEM size in bytes)</description></field>
-            <field><name>SYSINFO_MEM_2</name><bitRange>[23:16]</bitRange><description>reserved</description></field>
-            <field><name>SYSINFO_MEM_3</name><bitRange>[31:24]</bitRange><description>log2(reservation set granulartiy in bytes)</description></field>
+            <field><name>SYSINFO_MEM_2</name><bitRange>[23:16]</bitRange><description>yet unused</description></field>
+            <field><name>SYSINFO_MEM_3</name><bitRange>[31:24]</bitRange><description>yet unused</description></field>
           </fields>
         </register>
         <register>

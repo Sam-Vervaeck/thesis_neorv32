@@ -1,10 +1,10 @@
 -- ================================================================================ --
 -- NEORV32 SoC - Processor Top Entity                                               --
 -- -------------------------------------------------------------------------------- --
--- Check out the processor's online documentation for more information:             --
---  HQ:         https://github.com/stnolting/neorv32                                --
---  Data Sheet: https://stnolting.github.io/neorv32                                 --
---  User Guide: https://stnolting.github.io/neorv32/ug                              --
+-- HQ:           https://github.com/stnolting/neorv32                               --
+-- Data Sheet:   https://stnolting.github.io/neorv32                                --
+-- User Guide:   https://stnolting.github.io/neorv32/ug                             --
+-- Software Ref: https://stnolting.github.io/neorv32/sw/files.html                  --
 -- -------------------------------------------------------------------------------- --
 -- The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              --
 -- Copyright (c) NEORV32 contributors.                                              --
@@ -62,9 +62,6 @@ entity neorv32_top is
     HPM_NUM_CNTS               : natural range 0 to 13          := 0;           -- number of implemented HPM counters (0..13)
     HPM_CNT_WIDTH              : natural range 0 to 64          := 40;          -- total size of HPM counters (0..64)
 
-    -- Atomic Memory Access - Reservation Set Granularity --
-    AMO_RVS_GRANULARITY        : natural                        := 4;           -- size in bytes, has to be a power of 2, min 4
-
     -- Internal Instruction memory (IMEM) --
     MEM_INT_IMEM_EN            : boolean                        := false;       -- implement processor-internal instruction memory
     MEM_INT_IMEM_SIZE          : natural                        := 16*1024;     -- size of processor-internal instruction memory in bytes (use a power of 2)
@@ -88,8 +85,8 @@ entity neorv32_top is
     XBUS_TIMEOUT               : natural                        := 255;         -- cycles after a pending bus access auto-terminates (0 = disabled)
     XBUS_REGSTAGE_EN           : boolean                        := false;       -- add XBUS register stage
     XBUS_CACHE_EN              : boolean                        := false;       -- enable external bus cache (x-cache)
-    XBUS_CACHE_NUM_BLOCKS      : natural                        := 64;          -- x-cache: number of blocks (min 1), has to be a power of 2
-    XBUS_CACHE_BLOCK_SIZE      : natural                        := 32;          -- x-cache: block size in bytes (min 4), has to be a power of 2
+    XBUS_CACHE_NUM_BLOCKS      : natural range 1 to 256         := 64;          -- x-cache: number of blocks (min 1), has to be a power of 2
+    XBUS_CACHE_BLOCK_SIZE      : natural range 1 to 2**16       := 32;          -- x-cache: block size in bytes (min 4), has to be a power of 2
 
     -- Execute in-place module (XIP) --
     XIP_EN                     : boolean                        := false;       -- implement execute in place module (XIP)?
@@ -99,10 +96,9 @@ entity neorv32_top is
 
     -- External Interrupts Controller (XIRQ) --
     XIRQ_NUM_CH                : natural range 0 to 32          := 0;           -- number of external IRQ channels (0..32)
-    XIRQ_TRIGGER_TYPE          : std_ulogic_vector(31 downto 0) := x"ffffffff"; -- trigger type: 0=level, 1=edge
-    XIRQ_TRIGGER_POLARITY      : std_ulogic_vector(31 downto 0) := x"ffffffff"; -- trigger polarity: 0=low-level/falling-edge, 1=high-level/rising-edge
 
     -- Processor peripherals --
+    IO_DISABLE_SYSINFO         : boolean                        := false;       -- disable the SYSINFO module (for advanced users only)
     IO_GPIO_NUM                : natural range 0 to 64          := 0;           -- number of GPIO input/output pairs (0..64)
     IO_MTIME_EN                : boolean                        := false;       -- implement machine system timer (MTIME)?
     IO_UART0_EN                : boolean                        := false;       -- implement primary universal asynchronous receiver/transmitter (UART0)?
@@ -137,104 +133,103 @@ entity neorv32_top is
   );
   port (
     -- Global control --
-    clk_i          : in  std_ulogic; -- global clock, rising edge
-    rstn_i         : in  std_ulogic; -- global reset, low-active, async
+    clk_i          : in  std_ulogic;                                        -- global clock, rising edge
+    rstn_i         : in  std_ulogic;                                        -- global reset, low-active, async
 
     -- JTAG on-chip debugger interface (available if ON_CHIP_DEBUGGER_EN = true) --
-    jtag_trst_i    : in  std_ulogic := 'H'; -- low-active TAP reset (optional)
-    jtag_tck_i     : in  std_ulogic := 'L'; -- serial clock
-    jtag_tdi_i     : in  std_ulogic := 'L'; -- serial data input
-    jtag_tdo_o     : out std_ulogic; -- serial data output
-    jtag_tms_i     : in  std_ulogic := 'L'; -- mode select
+    jtag_tck_i     : in  std_ulogic := 'L';                                 -- serial clock
+    jtag_tdi_i     : in  std_ulogic := 'L';                                 -- serial data input
+    jtag_tdo_o     : out std_ulogic;                                        -- serial data output
+    jtag_tms_i     : in  std_ulogic := 'L';                                 -- mode select
 
     -- External bus interface (available if XBUS_EN = true) --
-    xbus_adr_o     : out std_ulogic_vector(31 downto 0); -- address
-    xbus_dat_o     : out std_ulogic_vector(31 downto 0); -- write data
-    xbus_we_o      : out std_ulogic; -- read/write
-    xbus_sel_o     : out std_ulogic_vector(03 downto 0); -- byte enable
-    xbus_stb_o     : out std_ulogic; -- strobe
-    xbus_cyc_o     : out std_ulogic; -- valid cycle
+    xbus_adr_o     : out std_ulogic_vector(31 downto 0);                    -- address
+    xbus_dat_o     : out std_ulogic_vector(31 downto 0);                    -- write data
+    xbus_tag_o     : out std_ulogic_vector(2 downto 0);                     -- access tag
+    xbus_we_o      : out std_ulogic;                                        -- read/write
+    xbus_sel_o     : out std_ulogic_vector(3 downto 0);                     -- byte enable
+    xbus_stb_o     : out std_ulogic;                                        -- strobe
+    xbus_cyc_o     : out std_ulogic;                                        -- valid cycle
     xbus_dat_i     : in  std_ulogic_vector(31 downto 0) := (others => 'L'); -- read data
-    xbus_ack_i     : in  std_ulogic := 'L'; -- transfer acknowledge
-    xbus_err_i     : in  std_ulogic := 'L'; -- transfer error
+    xbus_ack_i     : in  std_ulogic := 'L';                                 -- transfer acknowledge
+    xbus_err_i     : in  std_ulogic := 'L';                                 -- transfer error
 
     -- Stream Link Interface (available if IO_SLINK_EN = true) --
     slink_rx_dat_i : in  std_ulogic_vector(31 downto 0) := (others => 'L'); -- RX input data
-    slink_rx_val_i : in  std_ulogic := 'L'; -- RX valid input
-    slink_rx_lst_i : in  std_ulogic := 'L'; -- last element of stream
-    slink_rx_rdy_o : out std_ulogic; -- RX ready to receive
-    slink_tx_dat_o : out std_ulogic_vector(31 downto 0); -- TX output data
-    slink_tx_val_o : out std_ulogic; -- TX valid output
-    slink_tx_lst_o : out std_ulogic; -- last element of stream
-    slink_tx_rdy_i : in  std_ulogic := 'L'; -- TX ready to send
+    slink_rx_src_i : in  std_ulogic_vector(3 downto 0)  := (others => 'L'); -- RX source routing information
+    slink_rx_val_i : in  std_ulogic := 'L';                                 -- RX valid input
+    slink_rx_lst_i : in  std_ulogic := 'L';                                 -- RX last element of stream
+    slink_rx_rdy_o : out std_ulogic;                                        -- RX ready to receive
+    slink_tx_dat_o : out std_ulogic_vector(31 downto 0);                    -- TX output data
+    slink_tx_dst_o : out std_ulogic_vector(3 downto 0);                     -- TX destination routing information
+    slink_tx_val_o : out std_ulogic;                                        -- TX valid output
+    slink_tx_lst_o : out std_ulogic;                                        -- TX last element of stream
+    slink_tx_rdy_i : in  std_ulogic := 'L';                                 -- TX ready to send
 
     -- XIP (execute in place via SPI) signals (available if XIP_EN = true) --
-    xip_csn_o      : out std_ulogic; -- chip-select, low-active
-    xip_clk_o      : out std_ulogic; -- serial clock
-    xip_dat_i      : in  std_ulogic := 'L'; -- device data input
-    xip_dat_o      : out std_ulogic; -- controller data output
+    xip_csn_o      : out std_ulogic;                                        -- chip-select, low-active
+    xip_clk_o      : out std_ulogic;                                        -- serial clock
+    xip_dat_i      : in  std_ulogic := 'L';                                 -- device data input
+    xip_dat_o      : out std_ulogic;                                        -- controller data output
 
     -- GPIO (available if IO_GPIO_NUM > 0) --
-    gpio_o         : out std_ulogic_vector(63 downto 0); -- parallel output
+    gpio_o         : out std_ulogic_vector(63 downto 0);                    -- parallel output
     gpio_i         : in  std_ulogic_vector(63 downto 0) := (others => 'L'); -- parallel input
 
     -- primary UART0 (available if IO_UART0_EN = true) --
-    uart0_txd_o    : out std_ulogic; -- UART0 send data
-    uart0_rxd_i    : in  std_ulogic := 'L'; -- UART0 receive data
-    uart0_rts_o    : out std_ulogic; -- HW flow control: UART0.RX ready to receive ("RTR"), low-active, optional
-    uart0_cts_i    : in  std_ulogic := 'L'; -- HW flow control: UART0.TX allowed to transmit, low-active, optional
+    uart0_txd_o    : out std_ulogic;                                        -- UART0 send data
+    uart0_rxd_i    : in  std_ulogic := 'L';                                 -- UART0 receive data
+    uart0_rts_o    : out std_ulogic;                                        -- HW flow control: UART0.RX ready to receive ("RTR"), low-active, optional
+    uart0_cts_i    : in  std_ulogic := 'L';                                 -- HW flow control: UART0.TX allowed to transmit, low-active, optional
 
     -- secondary UART1 (available if IO_UART1_EN = true) --
-    uart1_txd_o    : out std_ulogic; -- UART1 send data
-    uart1_rxd_i    : in  std_ulogic := 'L'; -- UART1 receive data
-    uart1_rts_o    : out std_ulogic; -- HW flow control: UART1.RX ready to receive ("RTR"), low-active, optional
-    uart1_cts_i    : in  std_ulogic := 'L'; -- HW flow control: UART1.TX allowed to transmit, low-active, optional
+    uart1_txd_o    : out std_ulogic;                                        -- UART1 send data
+    uart1_rxd_i    : in  std_ulogic := 'L';                                 -- UART1 receive data
+    uart1_rts_o    : out std_ulogic;                                        -- HW flow control: UART1.RX ready to receive ("RTR"), low-active, optional
+    uart1_cts_i    : in  std_ulogic := 'L';                                 -- HW flow control: UART1.TX allowed to transmit, low-active, optional
 
     -- SPI (available if IO_SPI_EN = true) --
-    spi_clk_o      : out std_ulogic; -- SPI serial clock
-    spi_dat_o      : out std_ulogic; -- controller data out, peripheral data in
-    spi_dat_i      : in  std_ulogic := 'L'; -- controller data in, peripheral data out
-    spi_csn_o      : out std_ulogic_vector(07 downto 0); -- chip-select
+    spi_clk_o      : out std_ulogic;                                        -- SPI serial clock
+    spi_dat_o      : out std_ulogic;                                        -- controller data out, peripheral data in
+    spi_dat_i      : in  std_ulogic := 'L';                                 -- controller data in, peripheral data out
+    spi_csn_o      : out std_ulogic_vector(7 downto 0);                     -- chip-select, low-active
 
     -- SDI (available if IO_SDI_EN = true) --
-    sdi_clk_i      : in  std_ulogic := 'L'; -- SDI serial clock
-    sdi_dat_o      : out std_ulogic; -- controller data out, peripheral data in
-    sdi_dat_i      : in  std_ulogic := 'L'; -- controller data in, peripheral data out
-    sdi_csn_i      : in  std_ulogic := 'H'; -- chip-select
+    sdi_clk_i      : in  std_ulogic := 'L';                                 -- SDI serial clock
+    sdi_dat_o      : out std_ulogic;                                        -- controller data out, peripheral data in
+    sdi_dat_i      : in  std_ulogic := 'L';                                 -- controller data in, peripheral data out
+    sdi_csn_i      : in  std_ulogic := 'H';                                 -- chip-select, low-active
 
     -- TWI (available if IO_TWI_EN = true) --
-    twi_sda_i      : in  std_ulogic := 'H'; -- serial data line sense input
-    twi_sda_o      : out std_ulogic; -- serial data line output (pull low only)
-    twi_scl_i      : in  std_ulogic := 'H'; -- serial clock line sense input
-    twi_scl_o      : out std_ulogic; -- serial clock line output (pull low only)
+    twi_sda_i      : in  std_ulogic := 'H';                                 -- serial data line sense input
+    twi_sda_o      : out std_ulogic;                                        -- serial data line output (pull low only)
+    twi_scl_i      : in  std_ulogic := 'H';                                 -- serial clock line sense input
+    twi_scl_o      : out std_ulogic;                                        -- serial clock line output (pull low only)
 
     -- 1-Wire Interface (available if IO_ONEWIRE_EN = true) --
-    onewire_i      : in  std_ulogic := 'H'; -- 1-wire bus sense input
-    onewire_o      : out std_ulogic; -- 1-wire bus output (pull low only)
+    onewire_i      : in  std_ulogic := 'H';                                 -- 1-wire bus sense input
+    onewire_o      : out std_ulogic;                                        -- 1-wire bus output (pull low only)
 
     -- PWM (available if IO_PWM_NUM_CH > 0) --
-    pwm_o          : out std_ulogic_vector(11 downto 0); -- pwm channels
+    pwm_o          : out std_ulogic_vector(11 downto 0);                    -- pwm channels
 
     -- Custom Functions Subsystem IO (available if IO_CFS_EN = true) --
     cfs_in_i       : in  std_ulogic_vector(IO_CFS_IN_SIZE-1 downto 0) := (others => 'L'); -- custom CFS inputs conduit
-    cfs_out_o      : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0); -- custom CFS outputs conduit
+    cfs_out_o      : out std_ulogic_vector(IO_CFS_OUT_SIZE-1 downto 0);     -- custom CFS outputs conduit
 
     -- NeoPixel-compatible smart LED interface (available if IO_NEOLED_EN = true) --
-    neoled_o       : out std_ulogic; -- async serial data line
+    neoled_o       : out std_ulogic;                                        -- async serial data line
 
     -- Machine timer system time (available if IO_MTIME_EN = true) --
-    mtime_time_o   : out std_ulogic_vector(63 downto 0); -- current system time
-
-    -- GPTMR timer capture (available if IO_GPTMR_EN = true) --
-    gptmr_trig_i   : in  std_ulogic := 'L'; -- capture trigger
+    mtime_time_o   : out std_ulogic_vector(63 downto 0);                    -- current system time
 
     -- External platform interrupts (available if XIRQ_NUM_CH > 0) --
     xirq_i         : in  std_ulogic_vector(31 downto 0) := (others => 'L'); -- IRQ channels
 
     -- CPU interrupts --
-    mtime_irq_i    : in  std_ulogic := 'L'; -- machine timer interrupt, available if IO_MTIME_EN = false
-    msw_irq_i      : in  std_ulogic := 'L'; -- machine software interrupt
-    mext_irq_i     : in  std_ulogic := 'L'  -- machine external interrupt
+    mtime_irq_i    : in  std_ulogic := 'L';                                 -- machine timer interrupt, available if IO_MTIME_EN = false
+    msw_irq_i      : in  std_ulogic := 'L';                                 -- machine software interrupt
+    mext_irq_i     : in  std_ulogic := 'L'                                  -- machine external interrupt
   );
 end neorv32_top;
 
@@ -247,6 +242,7 @@ architecture neorv32_top_rtl of neorv32_top is
   constant io_xirq_en_c    : boolean := boolean(XIRQ_NUM_CH > 0);
   constant io_pwm_en_c     : boolean := boolean(IO_PWM_NUM_CH > 0);
   constant cpu_smpmp_c     : boolean := boolean(PMP_NUM_REGIONS > 0);
+  constant io_sysinfo_en_c : boolean := not IO_DISABLE_SYSINFO;
 
   -- convert JEDEC ID to mvendor CSR --
   constant vendorid_c : std_ulogic_vector(31 downto 0) := x"00000" & "0" & JEDEC_ID;
@@ -269,7 +265,7 @@ architecture neorv32_top_rtl of neorv32_top is
   -- clock generator --
   signal clk_cpu                   : std_ulogic; -- CPU core clock, can be switched off
   signal clk_div, clk_div_ff       : std_ulogic_vector(11 downto 0);
-  signal clk_gen                   : std_ulogic_vector(07 downto 0);
+  signal clk_gen                   : std_ulogic_vector(7 downto 0);
   signal clk_gen_en, clk_gen_en_ff : std_ulogic;
   --
   type cg_en_enum_t is (
@@ -317,16 +313,13 @@ architecture neorv32_top_rtl of neorv32_top is
 
   -- IRQs --
   type firq_enum_t is (
-    FIRQ_UART0_RX, FIRQ_UART0_TX, FIRQ_UART1_RX, FIRQ_UART1_TX, FIRQ_SPI, FIRQ_SDI, FIRQ_TWI,
+    FIRQ_TRNG, FIRQ_UART0_RX, FIRQ_UART0_TX, FIRQ_UART1_RX, FIRQ_UART1_TX, FIRQ_SPI, FIRQ_SDI, FIRQ_TWI,
     FIRQ_CFS, FIRQ_NEOLED, FIRQ_XIRQ, FIRQ_GPTMR, FIRQ_ONEWIRE, FIRQ_DMA, FIRQ_SLINK_RX, FIRQ_SLINK_TX
   );
   type firq_t is array (firq_enum_t) of std_ulogic;
   signal firq      : firq_t;
   signal cpu_firq  : std_ulogic_vector(15 downto 0);
   signal mtime_irq : std_ulogic;
-
-  -- misc --
-  signal mtime_time : std_ulogic_vector(63 downto 0);
 
 begin
 
@@ -339,7 +332,7 @@ begin
     -- say hello --
     assert false report
       "[NEORV32] The NEORV32 RISC-V Processor " &
-      "(version 0x" & to_hstring32_f(hw_version_c) & "), " &
+      "(v" & print_version_f(hw_version_c) & "), " &
       "github.com/stnolting/neorv32" severity note;
 
     -- show main SoC configuration --
@@ -372,7 +365,7 @@ begin
       cond_sel_string_f(IO_DMA_EN,                 "DMA ",       "") &
       cond_sel_string_f(IO_SLINK_EN,               "SLINK ",     "") &
       cond_sel_string_f(IO_CRC_EN,                 "CRC ",       "") &
-      cond_sel_string_f(true,                      "SYSINFO ",   "") & -- always enabled
+      cond_sel_string_f(io_sysinfo_en_c,           "SYSINFO ",   "") &
       cond_sel_string_f(ON_CHIP_DEBUGGER_EN,       "OCD ",       "") &
       ""
       severity note;
@@ -384,6 +377,10 @@ begin
     -- DMEM size --
     assert not ((dmem_size_valid_c = false) and (MEM_INT_DMEM_EN = true)) report
       "[NEORV32] Auto-adjusting invalid DMEM size configuration." severity warning;
+
+    -- SYSINFO warning --
+    assert not (io_sysinfo_en_c = false) report
+      "[NEORV32] SYSINFO module disabled - large parts of the NEORV32 software framework will no longer work!" severity warning;
 
   end generate; -- /sanity_checks
 
@@ -557,16 +554,16 @@ begin
     );
 
     -- fast interrupt requests (FIRQs) --
-    cpu_firq(00) <= '0'; -- reserved
-    cpu_firq(01) <= firq(FIRQ_CFS);
-    cpu_firq(02) <= firq(FIRQ_UART0_RX);
-    cpu_firq(03) <= firq(FIRQ_UART0_TX);
-    cpu_firq(04) <= firq(FIRQ_UART1_RX);
-    cpu_firq(05) <= firq(FIRQ_UART1_TX);
-    cpu_firq(06) <= firq(FIRQ_SPI);
-    cpu_firq(07) <= firq(FIRQ_TWI);
-    cpu_firq(08) <= firq(FIRQ_XIRQ);
-    cpu_firq(09) <= firq(FIRQ_NEOLED);
+    cpu_firq(0)  <= firq(FIRQ_TRNG);
+    cpu_firq(1)  <= firq(FIRQ_CFS);
+    cpu_firq(2)  <= firq(FIRQ_UART0_RX);
+    cpu_firq(3)  <= firq(FIRQ_UART0_TX);
+    cpu_firq(4)  <= firq(FIRQ_UART1_RX);
+    cpu_firq(5)  <= firq(FIRQ_UART1_TX);
+    cpu_firq(6)  <= firq(FIRQ_SPI);
+    cpu_firq(7)  <= firq(FIRQ_TWI);
+    cpu_firq(8)  <= firq(FIRQ_XIRQ);
+    cpu_firq(9)  <= firq(FIRQ_NEOLED);
     cpu_firq(10) <= firq(FIRQ_DMA);
     cpu_firq(11) <= firq(FIRQ_SDI);
     cpu_firq(12) <= firq(FIRQ_GPTMR);
@@ -641,14 +638,15 @@ begin
       PORT_B_READ_ONLY => true -- i-fetch is read-only
     )
     port map (
-      clk_i   => clk_i,
-      rstn_i  => rstn_sys,
-      a_req_i => dcache_req, -- prioritized
-      a_rsp_o => dcache_rsp,
-      b_req_i => icache_req,
-      b_rsp_o => icache_rsp,
-      x_req_o => core_req,
-      x_rsp_i => core_rsp
+      clk_i    => clk_i,
+      rstn_i   => rstn_sys,
+      a_lock_i => '0',        -- no exclusive accesses for port A
+      a_req_i  => dcache_req, -- prioritized
+      a_rsp_o  => dcache_rsp,
+      b_req_i  => icache_req,
+      b_rsp_o  => icache_rsp,
+      x_req_o  => core_req,
+      x_rsp_i  => core_rsp
     );
 
   end generate; -- /core_complex
@@ -683,14 +681,15 @@ begin
       PORT_B_READ_ONLY => false
     )
     port map (
-      clk_i   => clk_i,
-      rstn_i  => rstn_sys,
-      a_req_i => core_req, -- prioritized
-      a_rsp_o => core_rsp,
-      b_req_i => dma_req,
-      b_rsp_o => dma_rsp,
-      x_req_o => main_req,
-      x_rsp_i => main_rsp
+      clk_i    => clk_i,
+      rstn_i   => rstn_sys,
+      a_lock_i => '0',      -- no exclusive accesses for port A
+      a_req_i  => core_req, -- prioritized
+      a_rsp_o  => core_rsp,
+      b_req_i  => dma_req,
+      b_rsp_o  => dma_rsp,
+      x_req_o  => main_req,
+      x_rsp_i  => main_rsp
     );
 
   end generate; -- /neorv32_dma_complex_true
@@ -710,9 +709,6 @@ begin
   neorv32_bus_reservation_set_true:
   if CPU_EXTENSION_RISCV_A generate
     neorv32_bus_reservation_set_inst: entity neorv32.neorv32_bus_reservation_set
-    generic map (
-      GRANULARITY => AMO_RVS_GRANULARITY
-    )
     port map (
       clk_i       => clk_i,
       rstn_i      => rstn_sys,
@@ -739,34 +735,40 @@ begin
   neorv32_bus_gateway_inst: entity neorv32.neorv32_bus_gateway
   generic map (
     TIMEOUT  => bus_timeout_c,
-    -- port A: IMEM --
+    -- port A: internal IMEM --
     A_ENABLE => MEM_INT_IMEM_EN,
     A_BASE   => mem_imem_base_c,
     A_SIZE   => imem_size_c,
     A_TMO_EN => true,
-    -- port B: DMEM --
+    A_PRIV   => false,
+    -- port B: internal DMEM --
     B_ENABLE => MEM_INT_DMEM_EN,
     B_BASE   => mem_dmem_base_c,
     B_SIZE   => dmem_size_c,
     B_TMO_EN => true,
+    B_PRIV   => false,
     -- port C: XIP --
     C_ENABLE => XIP_EN,
     C_BASE   => mem_xip_base_c,
     C_SIZE   => mem_xip_size_c,
-    C_TMO_EN => false, -- not timeout for XIP flash accesses
+    C_TMO_EN => false, -- no timeout for XIP accesses
+    C_PRIV   => false,
     -- port D: BOOT ROM --
     D_ENABLE => INT_BOOTLOADER_EN,
     D_BASE   => mem_boot_base_c,
     D_SIZE   => mem_boot_size_c,
     D_TMO_EN => true,
+    D_PRIV   => true, -- only privileged (M-mode) accesses are allowed
     -- port E: IO --
-    E_ENABLE => true, -- always enabled (mandatory core module)
+    E_ENABLE => true, -- always enabled (but will be trimmed if no IO devices are implemented)
     E_BASE   => mem_io_base_c,
     E_SIZE   => mem_io_size_c,
     E_TMO_EN => true,
-    -- port X: XBUS --
+    E_PRIV   => true, -- only privileged (M-mode) accesses are allowed
+    -- port X (the void): XBUS --
     X_ENABLE => XBUS_EN,
-    X_TMO_EN => false -- timeout handled by XBUS gateway
+    X_TMO_EN => false, -- timeout handled by XBUS gateway
+    X_PRIV   => false
   )
   port map (
     -- global control --
@@ -946,6 +948,7 @@ begin
         xbus_adr_o => xbus_adr_o,
         xbus_dat_i => xbus_dat_i,
         xbus_dat_o => xbus_dat_o,
+        xbus_tag_o => xbus_tag_o,
         xbus_we_o  => xbus_we_o,
         xbus_sel_o => xbus_sel_o,
         xbus_stb_o => xbus_stb_o,
@@ -988,6 +991,7 @@ begin
       xbus_rsp   <= rsp_terminate_c;
       xbus_adr_o <= (others => '0');
       xbus_dat_o <= (others => '0');
+      xbus_tag_o <= (others => '0');
       xbus_we_o  <= '0';
       xbus_sel_o <= (others => '0');
       xbus_stb_o <= '0';
@@ -1009,7 +1013,7 @@ begin
     generic map (
       DEV_SIZE  => iodev_size_c, -- size of a single IO device
       DEV_00_EN => ON_CHIP_DEBUGGER_EN, DEV_00_BASE => base_io_dm_c,
-      DEV_01_EN => true,                DEV_01_BASE => base_io_sysinfo_c, -- always enabled (mandatory core module)
+      DEV_01_EN => io_sysinfo_en_c,     DEV_01_BASE => base_io_sysinfo_c,
       DEV_02_EN => IO_NEOLED_EN,        DEV_02_BASE => base_io_neoled_c,
       DEV_03_EN => io_gpio_en_c,        DEV_03_BASE => base_io_gpio_c,
       DEV_04_EN => IO_WDT_EN,           DEV_04_BASE => base_io_wdt_c,
@@ -1028,7 +1032,18 @@ begin
       DEV_17_EN => IO_CRC_EN,           DEV_17_BASE => base_io_crc_c,
       DEV_18_EN => IO_DMA_EN,           DEV_18_BASE => base_io_dma_c,
       DEV_19_EN => IO_SLINK_EN,         DEV_19_BASE => base_io_slink_c,
-      DEV_20_EN => IO_CFS_EN,           DEV_20_BASE => base_io_cfs_c
+      DEV_20_EN => IO_CFS_EN,           DEV_20_BASE => base_io_cfs_c,
+      DEV_21_EN => false,               DEV_31_BASE => (others => '-'), -- reserved
+      DEV_22_EN => false,               DEV_30_BASE => (others => '-'), -- reserved
+      DEV_23_EN => false,               DEV_29_BASE => (others => '-'), -- reserved
+      DEV_24_EN => false,               DEV_28_BASE => (others => '-'), -- reserved
+      DEV_25_EN => false,               DEV_27_BASE => (others => '-'), -- reserved
+      DEV_26_EN => false,               DEV_26_BASE => (others => '-'), -- reserved
+      DEV_27_EN => false,               DEV_25_BASE => (others => '-'), -- reserved
+      DEV_28_EN => false,               DEV_24_BASE => (others => '-'), -- reserved
+      DEV_29_EN => false,               DEV_23_BASE => (others => '-'), -- reserved
+      DEV_30_EN => false,               DEV_22_BASE => (others => '-'), -- reserved
+      DEV_31_EN => false,               DEV_21_BASE => (others => '-')  -- reserved
     )
     port map (
       main_req_i   => io_req,
@@ -1053,7 +1068,18 @@ begin
       dev_17_req_o => iodev_req(IODEV_CRC),     dev_17_rsp_i => iodev_rsp(IODEV_CRC),
       dev_18_req_o => iodev_req(IODEV_DMA),     dev_18_rsp_i => iodev_rsp(IODEV_DMA),
       dev_19_req_o => iodev_req(IODEV_SLINK),   dev_19_rsp_i => iodev_rsp(IODEV_SLINK),
-      dev_20_req_o => iodev_req(IODEV_CFS),     dev_20_rsp_i => iodev_rsp(IODEV_CFS)
+      dev_20_req_o => iodev_req(IODEV_CFS),     dev_20_rsp_i => iodev_rsp(IODEV_CFS),
+      dev_21_req_o => open,                     dev_21_rsp_i => rsp_terminate_c, -- reserved
+      dev_22_req_o => open,                     dev_22_rsp_i => rsp_terminate_c, -- reserved
+      dev_23_req_o => open,                     dev_23_rsp_i => rsp_terminate_c, -- reserved
+      dev_24_req_o => open,                     dev_24_rsp_i => rsp_terminate_c, -- reserved
+      dev_25_req_o => open,                     dev_25_rsp_i => rsp_terminate_c, -- reserved
+      dev_26_req_o => open,                     dev_26_rsp_i => rsp_terminate_c, -- reserved
+      dev_27_req_o => open,                     dev_27_rsp_i => rsp_terminate_c, -- reserved
+      dev_28_req_o => open,                     dev_28_rsp_i => rsp_terminate_c, -- reserved
+      dev_29_req_o => open,                     dev_29_rsp_i => rsp_terminate_c, -- reserved
+      dev_30_req_o => open,                     dev_30_rsp_i => rsp_terminate_c, -- reserved
+      dev_31_req_o => open,                     dev_31_rsp_i => rsp_terminate_c  -- reserved
     );
 
 
@@ -1180,30 +1206,16 @@ begin
         rstn_i    => rstn_sys,
         bus_req_i => iodev_req(IODEV_MTIME),
         bus_rsp_o => iodev_rsp(IODEV_MTIME),
-        time_o    => mtime_time,
+        time_o    => mtime_time_o,
         irq_o     => mtime_irq
       );
-
-      -- synchronize system time output LO --
-      mtime_sync: process(rstn_sys, clk_i)
-      begin
-        if (rstn_sys = '0') then
-          mtime_time_o(31 downto 0) <= (others => '0');
-        elsif rising_edge(clk_i) then
-          mtime_time_o(31 downto 0) <= mtime_time(31 downto 0);
-        end if;
-      end process mtime_sync;
-
-      -- system time output HI --
-      mtime_time_o(63 downto 32) <= mtime_time(63 downto 32);
-
     end generate;
 
     neorv32_mtime_inst_false:
     if not IO_MTIME_EN generate
       iodev_rsp(IODEV_MTIME) <= rsp_terminate_c;
-      mtime_irq              <= mtime_irq_i;
       mtime_time_o           <= (others => '0');
+      mtime_irq              <= mtime_irq_i;
     end generate;
 
 
@@ -1387,13 +1399,15 @@ begin
         clk_i     => clk_i,
         rstn_i    => rstn_sys,
         bus_req_i => iodev_req(IODEV_TRNG),
-        bus_rsp_o => iodev_rsp(IODEV_TRNG)
+        bus_rsp_o => iodev_rsp(IODEV_TRNG),
+        irq_o     => firq(FIRQ_TRNG)
       );
     end generate;
 
     neorv32_trng_inst_false:
     if not IO_TRNG_EN generate
       iodev_rsp(IODEV_TRNG) <= rsp_terminate_c;
+      firq(FIRQ_TRNG)       <= '0';
     end generate;
 
 
@@ -1432,9 +1446,7 @@ begin
     if io_xirq_en_c generate
       neorv32_xirq_inst: entity neorv32.neorv32_xirq
       generic map (
-        XIRQ_NUM_CH           => XIRQ_NUM_CH,
-        XIRQ_TRIGGER_TYPE     => XIRQ_TRIGGER_TYPE,
-        XIRQ_TRIGGER_POLARITY => XIRQ_TRIGGER_POLARITY
+        XIRQ_NUM_CH => XIRQ_NUM_CH
       )
       port map (
         clk_i     => clk_i,
@@ -1465,8 +1477,7 @@ begin
         bus_rsp_o   => iodev_rsp(IODEV_GPTMR),
         clkgen_en_o => cg_en(CG_GPTMR),
         clkgen_i    => clk_gen,
-        irq_o       => firq(FIRQ_GPTMR),
-        capture_i   => gptmr_trig_i
+        irq_o       => firq(FIRQ_GPTMR)
       );
     end generate;
 
@@ -1522,10 +1533,12 @@ begin
         rx_irq_o         => firq(FIRQ_SLINK_RX),
         tx_irq_o         => firq(FIRQ_SLINK_TX),
         slink_rx_data_i  => slink_rx_dat_i,
+        slink_rx_src_i   => slink_rx_src_i,
         slink_rx_valid_i => slink_rx_val_i,
         slink_rx_last_i  => slink_rx_lst_i,
         slink_rx_ready_o => slink_rx_rdy_o,
         slink_tx_data_o  => slink_tx_dat_o,
+        slink_tx_dst_o   => slink_tx_dst_o,
         slink_tx_valid_o => slink_tx_val_o,
         slink_tx_last_o  => slink_tx_lst_o,
         slink_tx_ready_i => slink_tx_rdy_i
@@ -1539,6 +1552,7 @@ begin
       firq(FIRQ_SLINK_TX)    <= '0';
       slink_rx_rdy_o         <= '0';
       slink_tx_dat_o         <= (others => '0');
+      slink_tx_dst_o         <= (others => '0');
       slink_tx_val_o         <= '0';
       slink_tx_lst_o         <= '0';
     end generate;
@@ -1565,56 +1579,64 @@ begin
 
     -- System Configuration Information Memory (SYSINFO) --------------------------------------
     -- -------------------------------------------------------------------------------------------
-    neorv32_sysinfo_inst: entity neorv32.neorv32_sysinfo
-    generic map (
-      CLOCK_FREQUENCY       => CLOCK_FREQUENCY,
-      CLOCK_GATING_EN       => CLOCK_GATING_EN,
-      INT_BOOTLOADER_EN     => INT_BOOTLOADER_EN,
-      MEM_INT_IMEM_EN       => MEM_INT_IMEM_EN,
-      MEM_INT_IMEM_SIZE     => imem_size_c,
-      MEM_INT_DMEM_EN       => MEM_INT_DMEM_EN,
-      MEM_INT_DMEM_SIZE     => dmem_size_c,
-      AMO_RVS_GRANULARITY   => AMO_RVS_GRANULARITY,
-      ICACHE_EN             => ICACHE_EN,
-      ICACHE_NUM_BLOCKS     => ICACHE_NUM_BLOCKS,
-      ICACHE_BLOCK_SIZE     => ICACHE_BLOCK_SIZE,
-      DCACHE_EN             => DCACHE_EN,
-      DCACHE_NUM_BLOCKS     => DCACHE_NUM_BLOCKS,
-      DCACHE_BLOCK_SIZE     => DCACHE_BLOCK_SIZE,
-      XBUS_EN               => XBUS_EN,
-      XBUS_CACHE_EN         => XBUS_CACHE_EN,
-      XBUS_CACHE_NUM_BLOCKS => XBUS_CACHE_NUM_BLOCKS,
-      XBUS_CACHE_BLOCK_SIZE => XBUS_CACHE_BLOCK_SIZE,
-      XIP_EN                => XIP_EN,
-      XIP_CACHE_EN          => XIP_CACHE_EN,
-      XIP_CACHE_NUM_BLOCKS  => XIP_CACHE_NUM_BLOCKS,
-      XIP_CACHE_BLOCK_SIZE  => XIP_CACHE_BLOCK_SIZE,
-      ON_CHIP_DEBUGGER_EN   => ON_CHIP_DEBUGGER_EN,
-      IO_GPIO_EN            => io_gpio_en_c,
-      IO_MTIME_EN           => IO_MTIME_EN,
-      IO_UART0_EN           => IO_UART0_EN,
-      IO_UART1_EN           => IO_UART1_EN,
-      IO_SPI_EN             => IO_SPI_EN,
-      IO_SDI_EN             => IO_SDI_EN,
-      IO_TWI_EN             => IO_TWI_EN,
-      IO_PWM_EN             => io_pwm_en_c,
-      IO_WDT_EN             => IO_WDT_EN,
-      IO_TRNG_EN            => IO_TRNG_EN,
-      IO_CFS_EN             => IO_CFS_EN,
-      IO_NEOLED_EN          => IO_NEOLED_EN,
-      IO_XIRQ_EN            => io_xirq_en_c,
-      IO_GPTMR_EN           => IO_GPTMR_EN,
-      IO_ONEWIRE_EN         => IO_ONEWIRE_EN,
-      IO_DMA_EN             => IO_DMA_EN,
-      IO_SLINK_EN           => IO_SLINK_EN,
-      IO_CRC_EN             => IO_CRC_EN
-    )
-    port map (
-      clk_i     => clk_i,
-      rstn_i    => rstn_sys,
-      bus_req_i => iodev_req(IODEV_SYSINFO),
-      bus_rsp_o => iodev_rsp(IODEV_SYSINFO)
-    );
+    neorv32_sysinfo_inst_true:
+    if io_sysinfo_en_c generate
+      neorv32_sysinfo_inst: entity neorv32.neorv32_sysinfo
+      generic map (
+        CLOCK_FREQUENCY       => CLOCK_FREQUENCY,
+        CLOCK_GATING_EN       => CLOCK_GATING_EN,
+        INT_BOOTLOADER_EN     => INT_BOOTLOADER_EN,
+        MEM_INT_IMEM_EN       => MEM_INT_IMEM_EN,
+        MEM_INT_IMEM_SIZE     => imem_size_c,
+        MEM_INT_DMEM_EN       => MEM_INT_DMEM_EN,
+        MEM_INT_DMEM_SIZE     => dmem_size_c,
+        ICACHE_EN             => ICACHE_EN,
+        ICACHE_NUM_BLOCKS     => ICACHE_NUM_BLOCKS,
+        ICACHE_BLOCK_SIZE     => ICACHE_BLOCK_SIZE,
+        DCACHE_EN             => DCACHE_EN,
+        DCACHE_NUM_BLOCKS     => DCACHE_NUM_BLOCKS,
+        DCACHE_BLOCK_SIZE     => DCACHE_BLOCK_SIZE,
+        XBUS_EN               => XBUS_EN,
+        XBUS_CACHE_EN         => XBUS_CACHE_EN,
+        XBUS_CACHE_NUM_BLOCKS => XBUS_CACHE_NUM_BLOCKS,
+        XBUS_CACHE_BLOCK_SIZE => XBUS_CACHE_BLOCK_SIZE,
+        XIP_EN                => XIP_EN,
+        XIP_CACHE_EN          => XIP_CACHE_EN,
+        XIP_CACHE_NUM_BLOCKS  => XIP_CACHE_NUM_BLOCKS,
+        XIP_CACHE_BLOCK_SIZE  => XIP_CACHE_BLOCK_SIZE,
+        ON_CHIP_DEBUGGER_EN   => ON_CHIP_DEBUGGER_EN,
+        IO_GPIO_EN            => io_gpio_en_c,
+        IO_MTIME_EN           => IO_MTIME_EN,
+        IO_UART0_EN           => IO_UART0_EN,
+        IO_UART1_EN           => IO_UART1_EN,
+        IO_SPI_EN             => IO_SPI_EN,
+        IO_SDI_EN             => IO_SDI_EN,
+        IO_TWI_EN             => IO_TWI_EN,
+        IO_PWM_EN             => io_pwm_en_c,
+        IO_WDT_EN             => IO_WDT_EN,
+        IO_TRNG_EN            => IO_TRNG_EN,
+        IO_CFS_EN             => IO_CFS_EN,
+        IO_NEOLED_EN          => IO_NEOLED_EN,
+        IO_XIRQ_EN            => io_xirq_en_c,
+        IO_GPTMR_EN           => IO_GPTMR_EN,
+        IO_ONEWIRE_EN         => IO_ONEWIRE_EN,
+        IO_DMA_EN             => IO_DMA_EN,
+        IO_SLINK_EN           => IO_SLINK_EN,
+        IO_CRC_EN             => IO_CRC_EN
+      )
+      port map (
+        clk_i     => clk_i,
+        rstn_i    => rstn_sys,
+        bus_req_i => iodev_req(IODEV_SYSINFO),
+        bus_rsp_o => iodev_rsp(IODEV_SYSINFO)
+      );
+    end generate;
+
+    neorv32_sysinfo_inst_false:
+    if not io_sysinfo_en_c generate
+      iodev_rsp(IODEV_SYSINFO) <= rsp_terminate_c;
+    end generate;
+
 
   end generate; -- /io_system
 
@@ -1634,15 +1656,14 @@ begin
       IDCODE_MANID   => JEDEC_ID
     )
     port map (
-      clk_i        => clk_i,
-      rstn_i       => rstn_ext,
-      jtag_trst_i  => jtag_trst_i,
-      jtag_tck_i   => jtag_tck_i,
-      jtag_tdi_i   => jtag_tdi_i,
-      jtag_tdo_o   => jtag_tdo_o,
-      jtag_tms_i   => jtag_tms_i,
-      dmi_req_o    => dmi_req,
-      dmi_rsp_i    => dmi_rsp
+      clk_i      => clk_i,
+      rstn_i     => rstn_ext,
+      jtag_tck_i => jtag_tck_i,
+      jtag_tdi_i => jtag_tdi_i,
+      jtag_tdo_o => jtag_tdo_o,
+      jtag_tms_i => jtag_tms_i,
+      dmi_req_o  => dmi_req,
+      dmi_rsp_i  => dmi_rsp
     );
 
     -- On-Chip Debugger - Debug Module (DM) ---------------------------------------------------

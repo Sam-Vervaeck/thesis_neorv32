@@ -1,44 +1,21 @@
-// #################################################################################################
-// # << NEORV32: neorv32_slink.c - Stream Link Interface HW Driver >>                              #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2023, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
-
-/**********************************************************************//**
+/**
  * @file neorv32_slink.c
  * @brief Stream Link Interface HW driver source file.
- **************************************************************************/
+ *
+ * @note These functions should only be used if the SLINK unit was synthesized (IO_SLINK_EN = true).
+ *
+ * @see https://stnolting.github.io/neorv32/sw/files.html
+ */
+
 #include "neorv32.h"
-#include "neorv32_slink.h"
 
 
 /**********************************************************************//**
@@ -146,6 +123,31 @@ inline uint32_t __attribute__((always_inline)) neorv32_slink_get(void) {
 inline uint32_t __attribute__((always_inline)) neorv32_slink_check_last(void) {
 
   return NEORV32_SLINK->CTRL & (1 << SLINK_CTRL_RX_LAST);
+}
+
+
+/**********************************************************************//**
+ * Set TX link routing destination
+ *
+ * @param[in] dst Routing destination ID (4-bit, LSB-aligned).
+ **************************************************************************/
+inline void __attribute__((always_inline)) neorv32_slink_set_dst(uint32_t dst) {
+
+  NEORV32_SLINK->ROUTE = dst;
+}
+
+
+/**********************************************************************//**
+ * Get RX link routing source
+ *
+ * @note This needs has to be called AFTER reading the actual data word
+ * using #neorv32_slink_get(void).
+ *
+ * @return 4-bit source routing ID.
+ **************************************************************************/
+inline uint32_t __attribute__((always_inline)) neorv32_slink_get_src(void) {
+
+  return (NEORV32_SLINK->ROUTE >> SLINK_ROUTE_SRC_LSB) & 0xF;
 }
 
 

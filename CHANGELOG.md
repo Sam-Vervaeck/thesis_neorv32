@@ -29,6 +29,36 @@ mimpid = 0x01040312 -> Version 01.04.03.12 -> v1.4.3.12
 
 | Date | Version | Comment | Ticket |
 |:----:|:-------:|:--------|:------:|
+| 29.07.2024 | [**:rocket:1.10.2**](https://github.com/stnolting/neorv32/releases/tag/v1.10.2) | **New release** | |
+| 28.07.2024 | 1.10.1.9 | make SYSINFO.CLK read/**write** | [#966](https://github.com/stnolting/neorv32/pull/966) |
+| 21.07.2024 | 1.10.1.8 | :lock: restrict IO access to privileged (machine-mode) software | [#958](https://github.com/stnolting/neorv32/pull/958) |
+| 20.07.2024 | 1.10.1.7 | :bug: fix bug in `sbrk` newlib system call (causing `malloc` to provide infinite memory until heap and stack collide) | [#957](https://github.com/stnolting/neorv32/pull/957) |
+| 20.07.2024 | 1.10.1.6 | SDI: remove explicit "RX clear flag"; add new flag to check the current state of the chip-select input | [#955](https://github.com/stnolting/neorv32/pull/955) |
+| 19.07.2024 | 1.10.1.5 | :sparkles: add "programmable" chip-select enable/disable functionality to SPI module | [#954](https://github.com/stnolting/neorv32/pull/954) |
+| 19.07.2024 | 1.10.1.4 | :bug: fix SDI "TX FIFO full" flag | [#953](https://github.com/stnolting/neorv32/pull/953) |
+| 18.07.2024 | 1.10.1.3 | :test_tube: add new generic to disable the SYSINFO module (:warning: for advanced users only that wish to use a CPU-only setup): `IO_DISABLE_SYSINFO` | [#952](https://github.com/stnolting/neorv32/pull/952) |
+| 10.07.2024 | 1.10.1.2 | minor rtl edits and cleanups | [#948](https://github.com/stnolting/neorv32/pull/948) |
+| 05.07.2024 | 1.10.1.1 | minor rtl cleanups and optimizations | [#941](https://github.com/stnolting/neorv32/pull/941) |
+| 04.07.2024 | [**:rocket:1.10.1**](https://github.com/stnolting/neorv32/releases/tag/v1.10.1) | **New release** | |
+| 04.07.2024 | 1.10.0.10 | :warning: rework GPTMRM and remove capture mode | [#939](https://github.com/stnolting/neorv32/pull/939) |
+| 03.07.2024 | 1.10.0.9 | :warning: remove `AMO_RVS_GRANULARITY` generic, reservation set granularity is now fixed to 4 bytes | [#938](https://github.com/stnolting/neorv32/pull/938) |
+| 03.07.2024 | 1.10.0.8 | :test_tube: add XBUS to AHB3-lite bridge | [#937](https://github.com/stnolting/neorv32/pull/937) |
+| 02.07.2024 | 1.10.0.7 | minor rtl and software edits and cleanups | [#936](https://github.com/stnolting/neorv32/pull/936) |
+| 30.06.2024 | 1.10.0.6 | minor rtl edits and cleanups | [#935](https://github.com/stnolting/neorv32/pull/935) |
+| 29.06.2024 | 1.10.0.5 | :warning: rework and optimize custom functions unit (CFU) interface; simplified illegal RVC decoding | [#932](https://github.com/stnolting/neorv32/pull/932) |
+| 23.06.2024 | 1.10.0.4 | minor rtl edits/cleanups | [#931](https://github.com/stnolting/neorv32/pull/931) |
+| 22.06.2024 | 1.10.0.3 | UARTs: add flags to clear RX/TX FIFOs; DMA: add FIRQ trigger type configuration flag | [#930](https://github.com/stnolting/neorv32/pull/930) |
+| 21.06.2024 | 1.10.0.2 | minor code rtl clean-ups; fix some missing TOP defaults | [#929](https://github.com/stnolting/neorv32/pull/929) |
+| 17.05.2024 | 1.10.0.1 | :warning: remove (optional and redundant) JTAG reset signal `jtag_trst_i` | [#928](https://github.com/stnolting/neorv32/pull/928) |
+| 16.05.2024 | [**:rocket:1.10.0**](https://github.com/stnolting/neorv32/releases/tag/v1.10.0) | **New release** | |
+| 15.06.2024 | 1.9.9.9 | :sparkles: add pre-configured example project for Eclipse IDE | [#926](https://github.com/stnolting/neorv32/pull/926) |
+| 14.06.2024 | 1.9.9.8 | minor rtl edits/cleanups; increase bootloader's auto-boot timeout from 8s to 10s | [#925](https://github.com/stnolting/neorv32/pull/925) |
+| 07.06.2024 | 1.9.9.7 | :sparkles: re-add TRNG "data available" interrupt | [#922](https://github.com/stnolting/neorv32/pull/922) |
+| 31.05.2024 | 1.9.9.6 | add "tag" signal to XBUS to provide additional access information (compatible to the AXI4 _ARPROT_ and _AWPROT_ signals) | [#917](https://github.com/stnolting/neorv32/pull/917) |
+| 30.05.2024 | 1.9.9.5 | :bug: fix uncached-vs-cached memory accesses (do not interrupt cache bursts by direct/uncached memory accesses) | [#915](https://github.com/stnolting/neorv32/pull/915) |
+| 29.05.2024 | 1.9.9.4 | Vivado IP block: add resizing ports for GPIOs, XIRQs and PWM; split size configuration for GPIO inputs and outputs | [#913](https://github.com/stnolting/neorv32/pull/913) |
+| 27.05.2024 | 1.9.9.3 | removed `XIRQ_TRIGGER_*` generics; XIRQ trigger type is now _programmable_ by dedicated configuration registers | [#911](https://github.com/stnolting/neorv32/pull/911) |
+| 21.05.2024 | 1.9.9.2 | :sparkles: add SLINK routing information ports (compatible to AXI-stream's `TID` and `TDEST` signals) | [#908](https://github.com/stnolting/neorv32/pull/908) |
 | 04.05.2024 | 1.9.9.1 | :sparkles: add NEORV32 as Vivado IP block | [#894](https://github.com/stnolting/neorv32/pull/894) |
 | 03.05.2024 | [**:rocket:1.9.9**](https://github.com/stnolting/neorv32/releases/tag/v1.9.9) | **New release** | |
 | 02.05.2024 | 1.9.8.10 | :bug: fix UART receiver bug (introduced in v1.9.8.7) | [#891](https://github.com/stnolting/neorv32/pull/891) |

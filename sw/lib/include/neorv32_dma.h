@@ -1,47 +1,25 @@
-// #################################################################################################
-// # << NEORV32: neorv32_dma.h - Direct Memory Access Controller (DMA) HW Driver >>                #
-// # ********************************************************************************************* #
-// # BSD 3-Clause License                                                                          #
-// #                                                                                               #
-// # Copyright (c) 2024, Stephan Nolting. All rights reserved.                                     #
-// #                                                                                               #
-// # Redistribution and use in source and binary forms, with or without modification, are          #
-// # permitted provided that the following conditions are met:                                     #
-// #                                                                                               #
-// # 1. Redistributions of source code must retain the above copyright notice, this list of        #
-// #    conditions and the following disclaimer.                                                   #
-// #                                                                                               #
-// # 2. Redistributions in binary form must reproduce the above copyright notice, this list of     #
-// #    conditions and the following disclaimer in the documentation and/or other materials        #
-// #    provided with the distribution.                                                            #
-// #                                                                                               #
-// # 3. Neither the name of the copyright holder nor the names of its contributors may be used to  #
-// #    endorse or promote products derived from this software without specific prior written      #
-// #    permission.                                                                                #
-// #                                                                                               #
-// # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS   #
-// # OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF               #
-// # MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE    #
-// # COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,     #
-// # EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE #
-// # GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED    #
-// # AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     #
-// # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED  #
-// # OF THE POSSIBILITY OF SUCH DAMAGE.                                                            #
-// # ********************************************************************************************* #
-// # The NEORV32 Processor - https://github.com/stnolting/neorv32              (c) Stephan Nolting #
-// #################################################################################################
+// ================================================================================ //
+// The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              //
+// Copyright (c) NEORV32 contributors.                                              //
+// Copyright (c) 2020 - 2024 Stephan Nolting. All rights reserved.                  //
+// Licensed under the BSD-3-Clause license, see LICENSE for details.                //
+// SPDX-License-Identifier: BSD-3-Clause                                            //
+// ================================================================================ //
 
-
-/**********************************************************************//**
+/**
  * @file neorv32_dma.h
  * @brief Direct Memory Access Controller (DMA) HW driver header file.
  *
  * @note These functions should only be used if the DMA controller was synthesized (IO_DMA_EN = true).
- **************************************************************************/
+ *
+ * @see https://stnolting.github.io/neorv32/sw/files.html
+ */
 
 #ifndef neorv32_dma_h
 #define neorv32_dma_h
+
+#include <stdint.h>
+
 
 /**********************************************************************//**
  * @name IO Device: Direct Memory Access Controller (DMA)
@@ -69,6 +47,7 @@ enum NEORV32_DMA_CTRL_enum {
   DMA_CTRL_BUSY         = 10, /**< DMA control register(10) (r/-): DMA busy / transfer in progress */
   DMA_CTRL_DONE         = 11, /**< DMA control register(11) (r/c): A transfer was executed when set */
 
+  DMA_CTRL_FIRQ_TYPE    = 15, /**< DMA control register(15) (r/w): Trigger on FIRQ rising-edge (0) or high-level (1) */
   DMA_CTRL_FIRQ_SEL_LSB = 16, /**< DMA control register(16) (r/w): FIRQ trigger select LSB */
   DMA_CTRL_FIRQ_SEL_MSB = 19  /**< DMA control register(19) (r/w): FIRQ trigger select MSB */
 };
@@ -127,7 +106,7 @@ void neorv32_dma_disable(void);
 void neorv32_dma_fence_enable(void);
 void neorv32_dma_fence_disable(void);
 void neorv32_dma_transfer(uint32_t base_src, uint32_t base_dst, uint32_t num, uint32_t config);
-void neorv32_dma_transfer_auto(uint32_t base_src, uint32_t base_dst, uint32_t num, uint32_t config, int firq_sel);
+void neorv32_dma_transfer_auto(uint32_t base_src, uint32_t base_dst, uint32_t num, uint32_t config, int firq_sel, int firq_type);
 int  neorv32_dma_status(void);
 int  neorv32_dma_done(void);
 /**@}*/

@@ -1,10 +1,10 @@
 -- ================================================================================ --
 -- NEORV32 CPU - CPU Top Entity                                                     --
 -- -------------------------------------------------------------------------------- --
--- Check out the processor's online documentation for more information:             --
---  HQ:         https://github.com/stnolting/neorv32                                --
---  Data Sheet: https://stnolting.github.io/neorv32                                 --
---  User Guide: https://stnolting.github.io/neorv32/ug                              --
+-- HQ:           https://github.com/stnolting/neorv32                               --
+-- Data Sheet:   https://stnolting.github.io/neorv32                                --
+-- User Guide:   https://stnolting.github.io/neorv32/ug                             --
+-- Software Ref: https://stnolting.github.io/neorv32/sw/files.html                  --
 -- -------------------------------------------------------------------------------- --
 -- The NEORV32 RISC-V Processor - https://github.com/stnolting/neorv32              --
 -- Copyright (c) NEORV32 contributors.                                              --
@@ -129,6 +129,7 @@ begin
     cond_sel_string_f(CPU_EXTENSION_RISCV_C,      "c",         "" ) &
     cond_sel_string_f(CPU_EXTENSION_RISCV_B,      "b",         "" ) &
     cond_sel_string_f(CPU_EXTENSION_RISCV_U,      "u",         "" ) &
+    cond_sel_string_f(true,                       "x",         "" ) & -- always enabled
     cond_sel_string_f(true,                       "_zicsr",    "" ) & -- always enabled
     cond_sel_string_f(CPU_EXTENSION_RISCV_Zicntr, "_zicntr",   "" ) &
     cond_sel_string_f(CPU_EXTENSION_RISCV_Zicond, "_zicond",   "" ) &
@@ -246,15 +247,15 @@ begin
   )
   port map (
     -- global control --
-    clk_i  => clk_i,     -- global clock, rising edge
-    rstn_i => rstn_i,    -- global reset, low-active, async
-    ctrl_i => ctrl,      -- main control bus
+    clk_i  => clk_i,    -- global clock, rising edge
+    rstn_i => rstn_i,   -- global reset, low-active, async
+    ctrl_i => ctrl,     -- main control bus
     -- operands --
-    rd_i   => rf_wdata,  -- destination operand rd
-    rs1_o  => rs1,       -- source operand rs1
-    rs2_o  => rs2,       -- source operand rs2
-    rs3_o  => rs3,       -- source operand rs3
-    rs4_o  => rs4        -- source operand rs4
+    rd_i   => rf_wdata, -- destination operand rd
+    rs1_o  => rs1,      -- source operand rs1
+    rs2_o  => rs2,      -- source operand rs2
+    rs3_o  => rs3,      -- source operand rs3
+    rs4_o  => rs4       -- source operand rs4
   );
 
   -- all buses are zero unless there is an according operation --

@@ -50,6 +50,7 @@ architecture neorv32_dma_rtl of neorv32_dma is
   constant ctrl_busy_c         : natural := 10; -- r/-: DMA transfer in progress
   constant ctrl_done_c         : natural := 11; -- r/c: a DMA transfer was executed/attempted
   --
+  constant ctrl_firq_type_c    : natural := 15; -- r/w: trigger on FIRQ rising-edge or on high-level
   constant ctrl_firq_sel_lsb_c : natural := 16; -- r/w: FIRQ trigger select LSB
   constant ctrl_firq_sel_msb_c : natural := 19; -- r/w: FIRQ trigger select MSB
 
@@ -64,11 +65,12 @@ architecture neorv32_dma_rtl of neorv32_dma is
     enable    : std_ulogic; -- DMA enabled when set
     auto      : std_ulogic; -- FIRQ-driven auto transfer
     fence     : std_ulogic; -- issue FENCE operation when DMA is done
-    firq_sel  : std_ulogic_vector(03 downto 0); -- FIRQ trigger select
+    firq_sel  : std_ulogic_vector(3 downto 0);  -- FIRQ trigger select
+    firq_type : std_ulogic; -- trigger on FIRQ rising-edge (0) or high-level (1)
     src_base  : std_ulogic_vector(31 downto 0); -- source base address
     dst_base  : std_ulogic_vector(31 downto 0); -- destination base address
     num       : std_ulogic_vector(23 downto 0); -- number of elements
-    qsel      : std_ulogic_vector(01 downto 0); -- data quantity select
+    qsel      : std_ulogic_vector(1 downto 0);  -- data quantity select
     src_inc   : std_ulogic; -- constant (0) or incrementing (1) source address
     dst_inc   : std_ulogic; -- constant (0) or incrementing (1) destination address
     endian    : std_ulogic; -- convert endianness when set
@@ -110,13 +112,12 @@ begin
   bus_access: process(rstn_i, clk_i)
   begin
     if (rstn_i = '0') then
-      bus_rsp_o.ack    <= '0';
-      bus_rsp_o.err    <= '0';
-      bus_rsp_o.data   <= (others => '0');
+      bus_rsp_o        <= rsp_terminate_c;
       config.enable    <= '0';
       config.auto      <= '0';
       config.fence     <= '0';
       config.firq_sel  <= (others => '0');
+      config.firq_type <= '0';
       config.src_base  <= (others => '0');
       config.dst_base  <= (others => '0');
       config.num       <= (others => '0');
@@ -143,7 +144,8 @@ begin
             config.auto      <= bus_req_i.data(ctrl_auto_c);
             config.fence     <= bus_req_i.data(ctrl_fence_c);
             config.done      <= '0'; -- clear on write access
-            config.firq_sel <= bus_req_i.data(ctrl_firq_sel_msb_c downto ctrl_firq_sel_lsb_c);
+            config.firq_type <= bus_req_i.data(ctrl_firq_type_c);
+            config.firq_sel  <= bus_req_i.data(ctrl_firq_sel_msb_c downto ctrl_firq_sel_lsb_c);
           end if;
           if (bus_req_i.addr(3 downto 2) = "01") then -- source base address
             config.src_base <= bus_req_i.data;
@@ -162,13 +164,14 @@ begin
         else -- read access
           case bus_req_i.addr(3 downto 2) is
             when "00" => -- control and status register
-              bus_rsp_o.data(ctrl_en_c)       <= config.enable;
-              bus_rsp_o.data(ctrl_auto_c)     <= config.auto;
-              bus_rsp_o.data(ctrl_fence_c)    <= config.fence;
-              bus_rsp_o.data(ctrl_error_rd_c) <= engine.err_rd;
-              bus_rsp_o.data(ctrl_error_wr_c) <= engine.err_wr;
-              bus_rsp_o.data(ctrl_busy_c)     <= engine.busy;
-              bus_rsp_o.data(ctrl_done_c)     <= config.done;
+              bus_rsp_o.data(ctrl_en_c)        <= config.enable;
+              bus_rsp_o.data(ctrl_auto_c)      <= config.auto;
+              bus_rsp_o.data(ctrl_fence_c)     <= config.fence;
+              bus_rsp_o.data(ctrl_error_rd_c)  <= engine.err_rd;
+              bus_rsp_o.data(ctrl_error_wr_c)  <= engine.err_wr;
+              bus_rsp_o.data(ctrl_busy_c)      <= engine.busy;
+              bus_rsp_o.data(ctrl_done_c)      <= config.done;
+              bus_rsp_o.data(ctrl_firq_type_c) <= config.firq_type;
               bus_rsp_o.data(ctrl_firq_sel_msb_c downto ctrl_firq_sel_lsb_c) <= config.firq_sel;
             when "01" => -- address of last read access
               bus_rsp_o.data <= engine.src_addr;
@@ -201,7 +204,11 @@ begin
     elsif rising_edge(clk_i) then
       firq_buf <= firq_i;
       match_ff <= match;
-      atrigger <= match and (not match_ff); -- trigger on rising edge of FIRQ
+      if (config.firq_type = '0') then -- auto-trigger on rising-edge of FIRQ
+        atrigger <= match and (not match_ff);
+      else -- auto-trigger on high-level of FIRQ
+        atrigger <= match;
+      end if;
     end if;
   end process automatic_trigger;
 
@@ -332,18 +339,10 @@ begin
           align_buf <= align_end;
         else -- byte
           case engine.src_addr(1 downto 0) is
-            when "00" => -- byte 0
-              align_buf(07 downto 0) <= align_end(07 downto 00);
-              align_buf(31 downto 8) <= (others => (config.qsel(1) and align_end(07))); -- sign extension
-            when "01" => -- byte 1
-              align_buf(07 downto 0) <= align_end(15 downto 08);
-              align_buf(31 downto 8) <= (others => (config.qsel(1) and align_end(15))); -- sign extension
-            when "10" => -- byte 2
-              align_buf(07 downto 0) <= align_end(23 downto 16);
-              align_buf(31 downto 8) <= (others => (config.qsel(1) and align_end(23))); -- sign extension
-            when others => -- byte 3
-              align_buf(07 downto 0) <= align_end(31 downto 24);
-              align_buf(31 downto 8) <= (others => (config.qsel(1) and align_end(31))); -- sign extension
+            when "00"   => align_buf <= replicate_f(config.qsel(1) and align_end(7),  24) & align_end(7 downto 0);
+            when "01"   => align_buf <= replicate_f(config.qsel(1) and align_end(15), 24) & align_end(15 downto 8);
+            when "10"   => align_buf <= replicate_f(config.qsel(1) and align_end(23), 24) & align_end(23 downto 16);
+            when others => align_buf <= replicate_f(config.qsel(1) and align_end(31), 24) & align_end(31 downto 24);
           end case;
         end if;
       end if;
@@ -355,14 +354,11 @@ begin
   begin
     dma_req_o.ben <= (others => '0'); -- default
     if (config.qsel = qsel_b2b_c) then -- byte
-      dma_req_o.data(07 downto 00) <= align_buf(7 downto 0);
-      dma_req_o.data(15 downto 08) <= align_buf(7 downto 0);
-      dma_req_o.data(23 downto 16) <= align_buf(7 downto 0);
-      dma_req_o.data(31 downto 24) <= align_buf(7 downto 0);
+      dma_req_o.data <= align_buf(7 downto 0) & align_buf(7 downto 0) & align_buf(7 downto 0) & align_buf(7 downto 0);
       dma_req_o.ben(to_integer(unsigned(engine.dst_addr(1 downto 0)))) <= '1';
     else -- word
       dma_req_o.data <= align_buf;
-      dma_req_o.ben  <= "1111";
+      dma_req_o.ben  <= (others => '1');
     end if;
   end process dst_align;
 
