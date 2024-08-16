@@ -84,7 +84,7 @@ The processor passes the official RISC-V architecture tests to ensure compatibil
 [neorv32-riscof](https://github.com/stnolting/neorv32-riscof) repository. It can successfully run _any_ C program
 (for example from the [`sw/example`](https://github.com/stnolting/neorv32/tree/main/sw/example) folder) including CoreMark
 and FreeRTOS and can be synthesized for _any_ target technology - [tested](https://github.com/stnolting/neorv32-setups)
-on Intel, AMD and Lattice FPGAs. The conversion into a single, plain-Verilog module file is automatically checked by the
+on Intel, AMD, Cologne Chip and Lattice FPGAs. The conversion into a single, plain-Verilog module file is automatically checked by the
 [neorv32-verilog](https://github.com/stnolting/neorv32-verilog) repository.
 
 
@@ -229,6 +229,7 @@ This overview provides some *quick links* to the most important sections of the
 * [Rationale](https://stnolting.github.io/neorv32/#_rationale) - why? how come? what for?
 * [Key Features](https://stnolting.github.io/neorv32/#_project_key_features) - what makes it special
 * [Structure](https://stnolting.github.io/neorv32/#_project_folder_structure) - folders, RTL files and compile order
+* [File-List Files](https://stnolting.github.io/neorv32/#_file_list_files) - to simplify HDL setup
 * [Metrics](https://stnolting.github.io/neorv32/#_fpga_implementation_results) - FPGA implementation and performance evaluation
 
 ### :desktop_computer: [NEORV32 Processor](https://stnolting.github.io/neorv32/#_neorv32_processor_soc) - The SoC
