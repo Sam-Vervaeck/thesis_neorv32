@@ -55,8 +55,6 @@ set_property IS_ENABLED FALSE [get_drc_checks LUTLP-1]
 set_property ALLOW_COMBINATORIAL_LOOPS TRUE
 ----
 
-.VHDL2008
+.IMEM built-in executable
 [IMPORTANT]
-If the processor's AXI/IP wrapper (`rtl/system_integration/neorv32_vivado_ip.vhd`) is used in stand-alone mode
-(i.e. not packaged by the default packaging TCL script), make sure to compile this design unit using
-VHDL2008 standard to allow connecting `std_logic_vector` and `std_ulogic_vector` without casting (#974).
+In case an executable is installed directly into the IMEM, as explained in <<_installing_an_executable_directly_into_memory>>, the program executed by the IP block after the reset signal is given cannot be updated by only replacing the `neorv32_application_image.vhd` file in the `packaged_ip` folder. For the Vivado design suite, the new program to be executed must be compiled using the `install` flag, the `source neorv32_vivado_ip.tcl` script has to be executed again in the `neorv32/rtl/system_integration` folder, and Vivado will prompt the `upgrade IP` request. Now, the IP block will execute the new program when execution starts after the reset signal.
